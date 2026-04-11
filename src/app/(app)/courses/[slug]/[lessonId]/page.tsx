@@ -210,14 +210,15 @@ export default function LessonPage() {
         {/* Video player */}
         <div className="bg-black shrink-0">
           {lesson.mux_playback_id ? (
-            <MuxPlayer
-              playbackId={lesson.mux_playback_id}
-              streamType="on-demand"
-              className="w-full"
-              style={{ maxHeight: '62vh' } as React.CSSProperties}
-              onEnded={markComplete}
-              accentColor="#9E50E5"
-            />
+            <div style={{ maxHeight: '62vh' }} className="overflow-hidden">
+              <MuxPlayer
+                playbackId={lesson.mux_playback_id}
+                streamType="on-demand"
+                className="w-full"
+                onEnded={markComplete}
+                accentColor="#9E50E5"
+              />
+            </div>
           ) : (
             <div className="aspect-video flex items-center justify-center bg-[#1a1a1a]">
               <div className="text-center text-white/40">
