@@ -8,9 +8,9 @@ import { PublicFooter } from '@/components/layout/PublicFooter'
 import { AnimateOnScroll } from '@/components/ui/animate-on-scroll'
 
 const SUGGESTED_COURSES = [
-  { key: 'iv-therapy-foundation', title: 'IV Therapy Foundation', price: '$199', subtitle: 'Core Certification' },
-  { key: 'complete-bundle', title: 'Complete IV Bundle', price: '$349', subtitle: 'Best Value' },
-  { key: 'filler-fundamentals', title: 'Filler Fundamentals', price: '$249', subtitle: 'Aesthetics' },
+  { key: 'iv-therapy-certification', title: 'IV Therapy Certification', price: '$299', subtitle: 'Core Certification' },
+  { key: 'complete-mastery-bundle', title: 'Complete Mastery Bundle', price: '$499', subtitle: 'Best Value — Save $396' },
+  { key: 'nad-plus-masterclass', title: 'NAD+ Therapy Masterclass', price: '$149', subtitle: 'Advanced Masterclass' },
 ]
 
 export default function CartPage() {

@@ -11,162 +11,169 @@ import { useCart } from '@/lib/cart'
 
 const COURSES = [
   {
-    key: 'iv-therapy-foundation',
-    category: 'iv',
-    badge: 'Most Popular',
+    key: 'iv-therapy-certification',
+    category: 'core',
+    badge: 'Core Course',
     badgeBg: 'bg-[#9E50E5] text-white',
     featured: true,
-    title: 'IV Therapy Foundation',
-    subtitle: 'Core Certification Course',
-    price: '$199',
-    priceInt: 19900,
+    title: 'IV Therapy Certification',
+    subtitle: 'Core Certification — 12 Modules',
+    price: '$299',
+    priceInt: 29900,
     type: 'One-time · Lifetime access',
-    description: 'The complete foundational certification for IV therapy providers. Everything you need to practice safely and confidently.',
+    description: 'The foundational IV therapy certification for healthcare professionals. 12 comprehensive modules covering everything you need to safely add IV services to your practice.',
     includes: [
-      'Full video course library',
-      'SVA-approved protocol library',
-      'Vitamin & mixing reference tools',
-      'Dosage calculator',
-      'AI lab test analyzer',
-      'Professional community access',
-      'Completion certificate',
+      'IV therapy fundamentals',
+      'Anatomy & physiology of veins',
+      'Patient assessment & screening',
+      'IV equipment, supplies & insertion techniques',
+      'Hydration therapy protocols',
+      'Infection control & safety standards',
+      'Legal considerations & scope of practice',
+      'Documentation & consent forms',
+      'Certificate of completion',
     ],
   },
   {
-    key: 'complete-bundle',
+    key: 'complete-mastery-bundle',
     category: 'bundle',
     badge: 'Best Value',
     badgeBg: 'bg-emerald-500 text-white',
     featured: true,
-    title: 'Complete IV Therapy Bundle',
-    subtitle: 'Foundation + All IV Add-ons',
-    price: '$349',
-    priceInt: 34900,
-    type: 'One-time · Save $128',
-    description: 'Everything in Foundation plus Myers Cocktail Masterclass and NAD+ Therapy. The best investment for serious IV providers.',
+    title: 'Complete IV Therapy Mastery Bundle',
+    subtitle: 'Core Course + All 4 Masterclasses',
+    price: '$499',
+    priceInt: 49900,
+    originalPrice: '$895',
+    type: 'One-time · Save $396',
+    description: 'Everything you need to master IV therapy. The Core Certification plus all four Advanced Masterclasses — the most complete IV therapy education available.',
     includes: [
-      'Everything in IV Therapy Foundation',
-      'Myers Cocktail Masterclass',
-      'NAD+ Therapy Certification',
-      'All future IV therapy updates',
+      'IV Therapy Certification (Core)',
+      'Advanced IV Complications & Emergency Mgmt',
+      'Vitamin & Nutrient Therapy Masterclass',
+      'NAD+ Therapy Masterclass',
+      'IV Push Administration Masterclass',
+      'All future course updates included',
       'Priority community support',
     ],
   },
   {
-    key: 'myers-cocktail-masterclass',
-    category: 'iv',
+    key: 'iv-complications-emergency',
+    category: 'addon',
     badge: 'Add-on',
     badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
     featured: false,
-    title: 'Myers Cocktail Masterclass',
-    subtitle: 'Advanced IV Add-on',
+    title: 'Advanced IV Complications & Emergency Management',
+    subtitle: 'Advanced Masterclass',
     price: '$149',
     priceInt: 14900,
-    type: 'One-time · Requires Foundation',
-    description: 'Deep-dive into the gold standard IV protocol with clinical case studies and patient assessment modules.',
+    type: 'One-time · Requires Core Course',
+    description: 'Master the recognition and management of IV complications and emergency situations to keep your patients safe.',
     includes: [
-      'In-depth Myers Cocktail protocol',
-      'Clinical case studies',
-      'Patient assessment module',
-      'Live Q&A recordings',
-      'Printable reference card',
+      'Identifying IV complications',
+      'Infiltration & extravasation management',
+      'Phlebitis prevention & treatment',
+      'Allergic reactions & anaphylaxis protocols',
+      'Air embolism awareness',
+      'Emergency management & documentation',
     ],
   },
   {
-    key: 'nad-plus-therapy',
-    category: 'iv',
+    key: 'vitamin-nutrient-therapy',
+    category: 'addon',
     badge: 'Add-on',
     badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
     featured: false,
-    title: 'NAD+ Therapy Certification',
-    subtitle: 'Advanced IV Add-on',
-    price: '$129',
-    priceInt: 12900,
-    type: 'One-time · Requires Foundation',
-    description: 'Master NAD+ infusion protocols for addiction recovery, cognitive support, and anti-aging applications.',
+    title: 'Vitamin & Nutrient Therapy Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Deep-dive into vitamin pharmacology, advanced nutrient protocols, and safe mixing and dosing strategies.',
     includes: [
-      'Complete NAD+ infusion protocol',
-      'Addiction recovery applications',
-      'Anti-aging & cognitive protocols',
-      'Patient screening forms',
-      'Adverse reaction management',
+      'Vitamin pharmacology fundamentals',
+      'Vitamin C & B complex protocols',
+      'Magnesium, zinc & trace elements',
+      'Glutathione therapy',
+      'Amino acids & nutrient combinations',
+      'Mixing compatibility & dosing strategies',
     ],
   },
   {
-    key: 'filler-fundamentals',
-    category: 'aesthetics',
-    badge: 'Aesthetics',
-    badgeBg: 'bg-pink-100 text-pink-700',
+    key: 'nad-plus-masterclass',
+    category: 'addon',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
     featured: false,
-    title: 'Filler Fundamentals',
-    subtitle: 'Aesthetics Certification',
-    price: '$249',
-    priceInt: 24900,
-    type: 'One-time · Lifetime access',
-    description: 'Comprehensive training in dermal filler techniques, facial anatomy, and safe injection practices.',
+    title: 'NAD+ Therapy Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Master NAD+ infusion protocols for anti-aging, cellular repair, and addiction recovery applications.',
     includes: [
-      'Facial anatomy deep dive',
-      'Injection techniques',
-      'Product selection guide',
-      'Complication management',
-      'Case review library',
-      'Completion certificate',
+      'Science behind NAD+ therapy',
+      'Anti-aging & cellular repair benefits',
+      'Infusion protocols & dosing',
+      'Infusion rates & monitoring',
+      'Managing common side effects',
+      'Patient selection & contraindications',
     ],
   },
   {
-    key: 'botox-neurotoxins',
-    category: 'aesthetics',
-    badge: 'Aesthetics',
-    badgeBg: 'bg-pink-100 text-pink-700',
+    key: 'iv-push-administration',
+    category: 'addon',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
     featured: false,
-    title: 'Botox & Neurotoxins',
-    subtitle: 'Aesthetics Certification',
-    price: '$249',
-    priceInt: 24900,
-    type: 'One-time · Lifetime access',
-    description: 'Complete training in neurotoxin injections, patient consultation, and treatment protocols from beginner to advanced.',
+    title: 'IV Push Administration Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Learn safe and effective IV push techniques including glutathione, vitamin push protocols, and safe administration rates.',
     includes: [
-      'Neurotoxin mechanisms & products',
-      'Injection mapping & dosing',
-      'Treatment area protocols',
-      'Patient consultation framework',
-      'Complication management',
-      'Completion certificate',
+      'IV push vs infusion techniques',
+      'Step-by-step IV push administration',
+      'Safe medication administration rates',
+      'Glutathione IV push protocols',
+      'Vitamin push techniques',
+      'Safety considerations & monitoring',
     ],
   },
 ]
 
 const FILTERS = [
   { key: 'all', label: 'All Courses' },
-  { key: 'iv', label: 'IV Therapy' },
-  { key: 'aesthetics', label: 'Aesthetics' },
-  { key: 'bundle', label: 'Bundles' },
+  { key: 'core', label: 'Core Course' },
+  { key: 'addon', label: 'Masterclasses' },
+  { key: 'bundle', label: 'Bundle' },
 ]
 
 const FAQS = [
   {
     q: 'Who can enroll?',
-    a: 'SVA courses are exclusively for licensed healthcare providers — RNs, NPs, PAs, MDs, DOs, LPNs, paramedics, and other licensed clinicians. License verification is required at enrollment.',
+    a: 'SVA courses are exclusively for licensed healthcare providers — RNs, NPs, PAs, MDs, DOs, LPNs, LVNs, paramedics, and other licensed clinicians. License verification is required at enrollment.',
   },
   {
     q: 'Is access really lifetime?',
     a: 'Yes. One purchase gives you permanent access including all future updates to that course. No subscriptions, no renewals, no expiry.',
   },
   {
-    q: 'Do I need Foundation before the add-ons?',
-    a: 'The IV add-on courses assume foundational IV therapy knowledge. We strongly recommend Foundation first, or purchase the Complete Bundle to get everything at once.',
+    q: 'Do I need the Core Course before the masterclasses?',
+    a: 'Yes — the Advanced Masterclasses build on foundational IV therapy knowledge. We strongly recommend completing the Core Course first, or purchase the Complete Bundle to get everything at once.',
   },
   {
-    q: 'Are aesthetics courses standalone?',
-    a: 'Yes — Filler Fundamentals and Botox & Neurotoxins are fully standalone courses open to any licensed provider.',
+    q: 'What does the bundle include?',
+    a: 'The Complete IV Therapy Mastery Bundle includes the Core Course ($299) plus all four Advanced Masterclasses ($149 each) — a total value of $895, bundled at $499.',
   },
   {
     q: 'Are CEU credits available?',
-    a: 'SVA is working toward accreditation. Completion certificates are issued for all courses and can be submitted to many state boards for continuing education.',
+    a: 'SVA is working toward accreditation. Completion certificates are issued for all courses and can be submitted to many state boards for continuing education credit.',
   },
   {
     q: 'Can my clinic purchase for multiple providers?',
-    a: 'Yes. Group/clinic pricing is available for 3+ providers. Contact us for multi-seat rates.',
+    a: 'Yes. Group and clinic pricing is available for 3 or more providers. Contact us for multi-seat rates.',
   },
 ]
 
@@ -174,9 +181,7 @@ export default function PricingPage() {
   const [activeFilter, setActiveFilter] = useState('all')
   const { addItem, isInCart } = useCart()
 
-  const filtered = activeFilter === 'all'
-    ? COURSES
-    : COURSES.filter((c) => c.category === activeFilter)
+  const filtered = activeFilter === 'all' ? COURSES : COURSES.filter((c) => c.category === activeFilter)
 
   return (
     <div className="min-h-screen bg-white">
@@ -188,12 +193,12 @@ export default function PricingPage() {
           <AnimateOnScroll>
             <p className="text-xs font-semibold text-[#9E50E5] uppercase tracking-widest mb-3">Course Catalog</p>
             <h1 className="text-4xl md:text-5xl font-extrabold text-[#1a1a1a] mb-4">
-              Professional medical education
+              IV Therapy Certification Courses
             </h1>
-            <p className="text-lg text-[#5B5B5B] max-w-xl mx-auto leading-relaxed mb-8">
-              One-time course purchases with lifetime access. No subscriptions — buy exactly what you need.
+            <p className="text-lg text-[#5B5B5B] max-w-2xl mx-auto leading-relaxed mb-8">
+              Start with the Core Course, then expand your expertise with Advanced Masterclasses.
+              Or save $396 with the Complete Bundle.
             </p>
-            {/* Trust badges */}
             <div className="flex flex-wrap gap-5 justify-center">
               {[
                 { icon: Shield, text: 'Licensed providers only' },
@@ -217,22 +222,25 @@ export default function PricingPage() {
 
           {/* Filter tabs */}
           <div className="flex flex-wrap gap-2 mb-10 justify-center">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setActiveFilter(f.key)}
-                className={`px-6 py-2.5 rounded-[30px] text-sm font-semibold transition-colors ${
-                  activeFilter === f.key
-                    ? 'bg-[#9E50E5] text-white'
-                    : 'bg-[#EEEEEE] text-[#5B5B5B] hover:bg-[#E0E0E0]'
-                }`}
-              >
-                {f.label}
-                <span className={`ml-2 text-xs ${activeFilter === f.key ? 'text-white/70' : 'text-[#5B5B5B]/60'}`}>
-                  {f.key === 'all' ? COURSES.length : COURSES.filter((c) => c.category === f.key).length}
-                </span>
-              </button>
-            ))}
+            {FILTERS.map((f) => {
+              const count = f.key === 'all' ? COURSES.length : COURSES.filter((c) => c.category === f.key).length
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setActiveFilter(f.key)}
+                  className={`px-6 py-2.5 rounded-[30px] text-sm font-semibold transition-colors ${
+                    activeFilter === f.key
+                      ? 'bg-[#9E50E5] text-white'
+                      : 'bg-[#EEEEEE] text-[#5B5B5B] hover:bg-[#E0E0E0]'
+                  }`}
+                >
+                  {f.label}
+                  <span className={`ml-2 text-xs ${activeFilter === f.key ? 'text-white/70' : 'text-[#5B5B5B]/60'}`}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           {/* Course grid */}
@@ -244,12 +252,14 @@ export default function PricingPage() {
                     ? 'border-2 border-[#9E50E5] bg-white'
                     : 'border border-[#D9D9D9] bg-[#FBF6FF]'
                 }`}>
-                  {/* Card header */}
                   <div className="flex items-start justify-between mb-5">
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${course.badgeBg}`}>
                       {course.badge}
                     </span>
                     <div className="text-right">
+                      {course.originalPrice && (
+                        <div className="text-xs text-[#5B5B5B] line-through">{course.originalPrice}</div>
+                      )}
                       <div className="text-2xl font-extrabold text-[#1a1a1a]">{course.price}</div>
                       <div className={`text-[11px] font-medium mt-0.5 ${course.category === 'bundle' ? 'text-emerald-600' : 'text-[#5B5B5B]'}`}>
                         {course.type}
@@ -257,21 +267,19 @@ export default function PricingPage() {
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-[#1a1a1a] mb-1">{course.title}</h3>
+                  <h3 className="text-[15px] font-bold text-[#1a1a1a] mb-1 leading-snug">{course.title}</h3>
                   <p className="text-xs font-semibold text-[#9E50E5] mb-3 uppercase tracking-wide">{course.subtitle}</p>
                   <p className="text-sm text-[#5B5B5B] leading-relaxed mb-5">{course.description}</p>
 
-                  {/* Includes */}
                   <div className="space-y-2 mb-7 flex-1">
                     {course.includes.map((item) => (
                       <div key={item} className="flex items-start gap-2 text-sm text-[#5B5B5B]">
-                        <CheckCircle className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${course.category === 'aesthetics' ? 'text-pink-500' : 'text-[#9E50E5]'}`} />
+                        <CheckCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[#9E50E5]" />
                         {item}
                       </div>
                     ))}
                   </div>
 
-                  {/* CTA */}
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
@@ -289,11 +297,7 @@ export default function PricingPage() {
                     </button>
                     <Link
                       href={`/course/${course.key}`}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-[30px] font-semibold text-sm transition-colors ${
-                        course.featured
-                          ? 'bg-[#9E50E5] hover:bg-[#7B3DB8] text-white'
-                          : 'bg-[#9E50E5] hover:bg-[#7B3DB8] text-white'
-                      }`}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-[30px] font-semibold text-sm bg-[#9E50E5] hover:bg-[#7B3DB8] text-white transition-colors"
                     >
                       View
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -303,13 +307,6 @@ export default function PricingPage() {
               </AnimateOnScroll>
             ))}
           </div>
-
-          {/* No results */}
-          {filtered.length === 0 && (
-            <div className="text-center py-20 text-[#5B5B5B]">
-              No courses found for this filter.
-            </div>
-          )}
         </div>
       </section>
 
@@ -332,7 +329,6 @@ export default function PricingPage() {
               </AnimateOnScroll>
             ))}
           </div>
-
           <AnimateOnScroll className="mt-10 text-center">
             <p className="text-[#5B5B5B] text-sm mb-4">Still have questions?</p>
             <Link

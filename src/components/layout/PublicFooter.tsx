@@ -31,7 +31,7 @@ export function PublicFooter() {
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/pricing" className="hover:text-white transition-colors">Course Catalog</Link></li>
               <li><Link href="/login" className="hover:text-white transition-colors">Sign In</Link></li>
-              <li><Link href="/checkout?course=iv-therapy-foundation" className="hover:text-white transition-colors">Enroll Now</Link></li>
+              <li><Link href="/checkout?course=iv-therapy-certification" className="hover:text-white transition-colors">Enroll Now</Link></li>
               <li><Link href="/dashboard" className="hover:text-white transition-colors">My Dashboard</Link></li>
             </ul>
           </div>
@@ -40,10 +40,10 @@ export function PublicFooter() {
           <div>
             <p className="text-sm font-semibold text-white mb-4">Courses</p>
             <ul className="space-y-2.5 text-sm">
-              <li><Link href="/checkout?course=iv-therapy-foundation" className="hover:text-white transition-colors">IV Therapy Foundation</Link></li>
-              <li><Link href="/checkout?course=complete-bundle" className="hover:text-white transition-colors">Complete Bundle</Link></li>
-              <li><Link href="/checkout?course=filler-fundamentals" className="hover:text-white transition-colors">Filler Fundamentals</Link></li>
-              <li><Link href="/checkout?course=botox-neurotoxins" className="hover:text-white transition-colors">Botox & Neurotoxins</Link></li>
+              <li><Link href="/course/iv-therapy-certification" className="hover:text-white transition-colors">IV Therapy Certification</Link></li>
+              <li><Link href="/course/complete-mastery-bundle" className="hover:text-white transition-colors">Complete Mastery Bundle</Link></li>
+              <li><Link href="/course/nad-plus-masterclass" className="hover:text-white transition-colors">NAD+ Therapy Masterclass</Link></li>
+              <li><Link href="/course/iv-push-administration" className="hover:text-white transition-colors">IV Push Administration</Link></li>
             </ul>
           </div>
 

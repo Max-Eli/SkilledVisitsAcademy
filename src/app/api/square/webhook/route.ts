@@ -8,12 +8,12 @@ import { purchaseConfirmationHtml, purchaseConfirmationText } from '@/lib/emails
 
 // Map course keys to course slugs in the DB
 const COURSE_KEY_TO_SLUG: Record<string, string> = {
-  'iv-therapy-foundation': 'iv-therapy-foundation',
-  'myers-cocktail-masterclass': 'myers-cocktail-masterclass',
-  'nad-plus-therapy': 'nad-plus-therapy',
-  'filler-fundamentals': 'filler-fundamentals',
-  'botox-neurotoxins': 'botox-neurotoxins',
-  'complete-bundle': 'complete-bundle',
+  'iv-therapy-certification': 'iv-therapy-certification',
+  'complete-mastery-bundle': 'complete-mastery-bundle',
+  'iv-complications-emergency': 'iv-complications-emergency',
+  'vitamin-nutrient-therapy': 'vitamin-nutrient-therapy',
+  'nad-plus-masterclass': 'nad-plus-masterclass',
+  'iv-push-administration': 'iv-push-administration',
 }
 
 export async function POST(request: Request) {
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           const courseSlug = COURSE_KEY_TO_SLUG[courseKey]
           if (!courseSlug) continue
 
-          if (courseSlug === 'complete-bundle') {
+          if (courseSlug === 'complete-mastery-bundle') {
             // Bundle: grant access to all IV therapy courses
             const { data: courses } = await supabase
               .from('courses')
@@ -121,20 +121,20 @@ export async function POST(request: Request) {
 
           if (userEmail) {
             const COURSE_TITLES: Record<string, string> = {
-              'iv-therapy-foundation': 'IV Therapy Foundation',
-              'myers-cocktail-masterclass': 'Myers Cocktail Masterclass',
-              'nad-plus-therapy': 'NAD+ Therapy Certification',
-              'filler-fundamentals': 'Filler Fundamentals',
-              'botox-neurotoxins': 'Botox & Neurotoxins',
-              'complete-bundle': 'Complete IV Therapy Bundle',
+              'iv-therapy-certification': 'IV Therapy Certification',
+              'complete-mastery-bundle': 'Complete IV Therapy Mastery Bundle',
+              'iv-complications-emergency': 'Advanced IV Complications & Emergency Management',
+              'vitamin-nutrient-therapy': 'Vitamin & Nutrient Therapy Masterclass',
+              'nad-plus-masterclass': 'NAD+ Therapy Masterclass',
+              'iv-push-administration': 'IV Push Administration Masterclass',
             }
             const COURSE_PRICES: Record<string, string> = {
-              'iv-therapy-foundation': '$199',
-              'myers-cocktail-masterclass': '$149',
-              'nad-plus-therapy': '$129',
-              'filler-fundamentals': '$249',
-              'botox-neurotoxins': '$249',
-              'complete-bundle': '$349',
+              'iv-therapy-certification': '$299',
+              'complete-mastery-bundle': '$499',
+              'iv-complications-emergency': '$149',
+              'vitamin-nutrient-therapy': '$149',
+              'nad-plus-masterclass': '$149',
+              'iv-push-administration': '$149',
             }
             const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 

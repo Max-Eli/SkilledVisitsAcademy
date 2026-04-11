@@ -140,10 +140,10 @@ export default function LandingPage() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    href="/checkout?course=iv-therapy-foundation"
+                    href="/checkout?course=iv-therapy-certification"
                     className="inline-flex items-center justify-center gap-2 px-8 py-[17px] rounded-[30px] border border-[#9E50E5] text-[#9E50E5] hover:bg-[#9E50E5] hover:text-white font-semibold text-[15px] transition-colors"
                   >
-                    Enroll Now — $199
+                    Enroll Now — $299
                   </Link>
                 </div>
               </AnimateOnScroll>
@@ -313,10 +313,10 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/checkout?course=iv-therapy-foundation"
+              href="/checkout?course=iv-therapy-certification"
               className="inline-flex items-center justify-center gap-2 px-9 py-[17px] rounded-[30px] bg-white text-[#9E50E5] hover:bg-[#FBF6FF] font-bold text-[15px] transition-colors"
             >
-              Enroll Now — $199
+              Enroll Now — $299
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link

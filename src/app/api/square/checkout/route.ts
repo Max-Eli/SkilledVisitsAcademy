@@ -4,12 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getSquare } from '@/lib/square'
 
 const COURSE_PLAN_MAP: Record<string, string | undefined> = {
-  'iv-therapy-foundation': process.env.SQUARE_IV_FOUNDATION_PLAN_ID,
-  'myers-cocktail-masterclass': process.env.SQUARE_MYERS_PLAN_ID,
-  'nad-plus-therapy': process.env.SQUARE_NAD_PLAN_ID,
-  'filler-fundamentals': process.env.SQUARE_FILLER_PLAN_ID,
-  'botox-neurotoxins': process.env.SQUARE_BOTOX_PLAN_ID,
-  'complete-bundle': process.env.SQUARE_BUNDLE_PLAN_ID,
+  'iv-therapy-certification': process.env.SQUARE_IV_CERTIFICATION_PLAN_ID,
+  'complete-mastery-bundle': process.env.SQUARE_BUNDLE_PLAN_ID,
+  'iv-complications-emergency': process.env.SQUARE_COMPLICATIONS_PLAN_ID,
+  'vitamin-nutrient-therapy': process.env.SQUARE_VITAMIN_PLAN_ID,
+  'nad-plus-masterclass': process.env.SQUARE_NAD_PLAN_ID,
+  'iv-push-administration': process.env.SQUARE_IV_PUSH_PLAN_ID,
 }
 
 export async function POST(request: Request) {
