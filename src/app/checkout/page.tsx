@@ -268,7 +268,7 @@ function CheckoutForm() {
       <header className="bg-white border-b border-[#D9D9D9] px-6 py-3">
         <div className="mx-auto max-w-[1140px] flex items-center justify-between">
           <Link href="/">
-            <Image src="/SkilledVisitsAcademy.png" alt="Skilled Visits Academy" width={320} height={86} className="h-20 w-auto" />
+            <Image src="/SkilledVisitsAcademyNEW.png" alt="Skilled Visits Academy" width={320} height={86} className="h-20 w-auto" />
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-[#5B5B5B]">
             <Lock className="h-3.5 w-3.5" />

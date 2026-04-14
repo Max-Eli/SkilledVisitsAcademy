@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <aside className="w-60 shrink-0 bg-slate-900 text-white flex flex-col">
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <Image src="/SkilledVisitsAcademy.png" alt="Skilled Visits Academy" width={140} height={36} className="h-8 w-auto brightness-0 invert" />
+            <Image src="/SkilledVisitsAcademyNEW.png" alt="Skilled Visits Academy" width={140} height={36} className="h-8 w-auto brightness-0 invert" />
           </div>
           <div className="flex items-center gap-1.5 mt-2">
             <Shield className="h-3 w-3 text-[#9E50E5]" />

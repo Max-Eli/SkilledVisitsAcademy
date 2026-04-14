@@ -101,7 +101,7 @@ export default function SignupPage() {
       {/* Header */}
       <header className="bg-white border-b border-[#D9D9D9] px-6 py-4">
         <Link href="/">
-          <Image src="/SkilledVisitsAcademy.png" alt="Skilled Visits Academy" width={160} height={44} className="h-10 w-auto" />
+          <Image src="/SkilledVisitsAcademyNEW.png" alt="Skilled Visits Academy" width={160} height={44} className="h-10 w-auto" />
         </Link>
       </header>
 

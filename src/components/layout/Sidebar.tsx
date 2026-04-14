@@ -68,7 +68,7 @@ export function Sidebar({ profile }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center px-5 py-4 border-b border-[#D9D9D9]">
         <Link href="/dashboard">
-          <Image src="/SkilledVisitsAcademy.png" alt="Skilled Visits Academy" width={150} height={40} className="h-9 w-auto" />
+          <Image src="/SkilledVisitsAcademyNEW.png" alt="Skilled Visits Academy" width={150} height={40} className="h-9 w-auto" />
         </Link>
       </div>
 

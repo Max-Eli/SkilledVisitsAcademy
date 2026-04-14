@@ -10,7 +10,7 @@ export function PublicFooter() {
           {/* Brand */}
           <div className="md:col-span-1">
             <Image
-              src="/SkilledVisitsAcademy.png"
+              src="/SkilledVisitsAcademyNEW.png"
               alt="Skilled Visits Academy"
               width={160}
               height={44}

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import MuxPlayer from '@mux/mux-player-react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -14,10 +15,23 @@ import {
   BookOpen,
   Award,
   Loader2,
+  Presentation,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Lesson } from '@/types/database'
+
+const SlideViewer = dynamic(
+  () => import('@/components/slide-viewer/SlideViewer').then((m) => m.SlideViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-[600px] bg-gradient-to-br from-[#1a1a1a] via-[#2a1a3a] to-[#1a1a1a] rounded-2xl">
+        <Loader2 className="h-6 w-6 animate-spin text-[#9E50E5]" />
+      </div>
+    ),
+  }
+)
 
 export default function LessonPage() {
   const params = useParams()
@@ -33,6 +47,9 @@ export default function LessonPage() {
   const [markingComplete, setMarkingComplete] = useState(false)
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null)
   const [showCelebration, setShowCelebration] = useState(false)
+  const [slideUrl, setSlideUrl] = useState<string | null>(null)
+  const [slideLoading, setSlideLoading] = useState(false)
+  const [slideError, setSlideError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -56,6 +73,35 @@ export default function LessonPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, lessonId])
+
+  useEffect(() => {
+    if (!lesson?.slide_pdf_url) {
+      setSlideUrl(null)
+      setSlideError(null)
+      return
+    }
+    let cancelled = false
+    setSlideLoading(true)
+    setSlideError(null)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/lessons/slide-url?lessonId=${lesson.id}`)
+        const data = await res.json()
+        if (cancelled) return
+        if (!res.ok) {
+          setSlideError(data.error ?? 'Failed to load slides')
+          setSlideUrl(null)
+        } else {
+          setSlideUrl(data.url)
+        }
+      } catch {
+        if (!cancelled) setSlideError('Failed to load slides')
+      } finally {
+        if (!cancelled) setSlideLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [lesson?.id, lesson?.slide_pdf_url])
 
   const checkAndIssueCertificate = useCallback(async (newCompletedIds: Set<string>) => {
     if (!course) return
@@ -155,6 +201,8 @@ export default function LessonPage() {
                 >
                   {done ? (
                     <CheckCircle2 className={cn('h-4 w-4 shrink-0', active ? 'text-white' : 'text-emerald-500')} />
+                  ) : l.slide_pdf_url ? (
+                    <Presentation className={cn('h-4 w-4 shrink-0', active ? 'text-white' : 'text-[#9E50E5]')} />
                   ) : l.mux_playback_id ? (
                     <PlayCircle className={cn('h-4 w-4 shrink-0', active ? 'text-white' : 'text-[#9E50E5]')} />
                   ) : (
@@ -207,27 +255,55 @@ export default function LessonPage() {
           </div>
         )}
 
-        {/* Video player */}
-        <div className="bg-black shrink-0">
-          {lesson.mux_playback_id ? (
-            <div style={{ maxHeight: '62vh' }} className="overflow-hidden">
-              <MuxPlayer
-                playbackId={lesson.mux_playback_id}
-                streamType="on-demand"
-                className="w-full"
-                onEnded={markComplete}
-                accentColor="#9E50E5"
-              />
-            </div>
-          ) : (
-            <div className="aspect-video flex items-center justify-center bg-[#1a1a1a]">
-              <div className="text-center text-white/40">
-                <BookOpen className="h-12 w-12 mx-auto mb-3" />
-                <p className="text-sm">Video not yet available</p>
+        {/* Player — slides take priority over video */}
+        {lesson.slide_pdf_url ? (
+          <div className="bg-[#0a0a0a] shrink-0 p-4 sm:p-6">
+            {slideLoading && (
+              <div className="flex items-center justify-center h-[600px] bg-gradient-to-br from-[#1a1a1a] via-[#2a1a3a] to-[#1a1a1a] rounded-2xl">
+                <div className="flex items-center gap-3 text-white/70">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#9E50E5]" />
+                  <span className="text-sm">Preparing slides...</span>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+            {slideError && !slideLoading && (
+              <div className="flex items-center justify-center h-[600px] bg-[#1a1a1a] rounded-2xl">
+                <div className="text-center text-white/60">
+                  <Presentation className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">{slideError}</p>
+                </div>
+              </div>
+            )}
+            {slideUrl && !slideLoading && !slideError && (
+              <SlideViewer
+                pdfUrl={slideUrl}
+                title={lesson.title}
+                onLastSlide={markComplete}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="bg-black shrink-0">
+            {lesson.mux_playback_id ? (
+              <div style={{ maxHeight: '62vh' }} className="overflow-hidden">
+                <MuxPlayer
+                  playbackId={lesson.mux_playback_id}
+                  streamType="on-demand"
+                  className="w-full"
+                  onEnded={markComplete}
+                  accentColor="#9E50E5"
+                />
+              </div>
+            ) : (
+              <div className="aspect-video flex items-center justify-center bg-[#1a1a1a]">
+                <div className="text-center text-white/40">
+                  <BookOpen className="h-12 w-12 mx-auto mb-3" />
+                  <p className="text-sm">Content not yet available</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Lesson info */}
         <div className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-7">

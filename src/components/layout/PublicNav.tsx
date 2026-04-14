@@ -37,7 +37,7 @@ export function PublicNav() {
           {/* Logo */}
           <Link href="/" onClick={() => setMobileOpen(false)}>
             <Image
-              src="/SkilledVisitsAcademy.png"
+              src="/SkilledVisitsAcademyNEW.png"
               alt="Skilled Visits Academy"
               width={320}
               height={86}

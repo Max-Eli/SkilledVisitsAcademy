@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# course source materials (uploaded to Supabase Storage, not tracked in git)
+/course-materials/

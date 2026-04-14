@@ -62,6 +62,8 @@ export interface Lesson {
   order_index: number
   published: boolean
   created_at: string
+  slide_pdf_url: string | null
+  slide_page_count: number | null
 }
 
 export interface LessonProgress {
