@@ -4,10 +4,34 @@ export interface PurchaseConfirmationData {
   courses: { title: string; price: string }[]
   totalPaid: string
   loginUrl: string
+  meeting?: {
+    meetingAt: string // ISO
+    meetingLink: string | null
+    accessUnlocksAt: string // ISO
+  }
+}
+
+function formatMeetingDate(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function formatMeetingTime(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  })
 }
 
 export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string {
-  const { studentName, courses, totalPaid, loginUrl } = data
+  const { studentName, courses, totalPaid, loginUrl, meeting } = data
   const firstName = studentName.split(' ')[0] || 'Provider'
   const courseList = courses
     .map(
@@ -18,6 +42,29 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
       </tr>`
     )
     .join('')
+
+  const meetingBlock = meeting
+    ? `
+              <!-- Live session block -->
+              <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9b9b9b;">Your live session</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#FBF6FF;border-radius:10px;border:1px solid #E9D8FB;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0;font-size:15px;font-weight:700;color:#1a1a1a;">${formatMeetingDate(meeting.meetingAt)}</p>
+                    <p style="margin:4px 0 0;font-size:14px;color:#5b5b5b;">${formatMeetingTime(meeting.meetingAt)}</p>
+                    ${
+                      meeting.meetingLink
+                        ? `<p style="margin:12px 0 0;"><a href="${meeting.meetingLink}" style="display:inline-block;background:#ffffff;border:1px solid #9E50E5;color:#9E50E5;text-decoration:none;font-weight:600;font-size:13px;padding:8px 16px;border-radius:20px;">Join the meeting →</a></p>`
+                        : `<p style="margin:12px 0 0;font-size:12px;color:#7b5aa3;font-style:italic;">We&rsquo;ll email you the Zoom/Google Meet link before your session.</p>`
+                    }
+                    <p style="margin:14px 0 0;font-size:13px;color:#7b5aa3;">
+                      📖 Course materials unlock on <strong>${formatMeetingDate(meeting.accessUnlocksAt)}</strong> (48 hours before your session) so you can prep.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              `
+    : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -60,6 +107,8 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
                   </td>
                 </tr>
               </table>
+
+              ${meetingBlock}
 
               <!-- Order summary -->
               <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9b9b9b;">Order Summary</p>
@@ -125,7 +174,18 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
 }
 
 export function purchaseConfirmationText(data: PurchaseConfirmationData): string {
-  const { studentName, courses, totalPaid, loginUrl } = data
+  const { studentName, courses, totalPaid, loginUrl, meeting } = data
+  const meetingLines = meeting
+    ? `
+
+YOUR LIVE SESSION
+${formatMeetingDate(meeting.meetingAt)} at ${formatMeetingTime(meeting.meetingAt)}
+${meeting.meetingLink ? `Join: ${meeting.meetingLink}` : 'We will email you the meeting link before your session.'}
+
+Course materials unlock on ${formatMeetingDate(meeting.accessUnlocksAt)} (48 hours before your session).
+`
+    : ''
+
   return `Hi ${studentName},
 
 Your enrollment is confirmed! You now have lifetime access to:
@@ -133,7 +193,7 @@ Your enrollment is confirmed! You now have lifetime access to:
 ${courses.map((c) => `• ${c.title} — ${c.price}`).join('\n')}
 
 Total charged: ${totalPaid}
-
+${meetingLines}
 Start learning now: ${loginUrl}
 
 Your access includes the full course library, SVA protocol tools, dosage calculator, AI lab analyzer, and professional community.

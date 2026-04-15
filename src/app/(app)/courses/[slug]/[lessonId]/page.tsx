@@ -56,12 +56,29 @@ export default function LessonPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const [{ data: courseData }, { data: progressData }] = await Promise.all([
+      const [{ data: courseData }, { data: progressData }, { data: profileData }] = await Promise.all([
         supabase.from('courses').select('id, title, lessons(*)').eq('slug', slug).single(),
         supabase.from('lesson_progress').select('lesson_id').eq('user_id', user.id),
+        supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
       ])
 
       if (!courseData) { router.push('/courses'); return }
+
+      // Bounce to the course overview (which renders the locked state with
+      // meeting details) if the cohort unlock time hasn't passed.
+      if (profileData?.role !== 'admin') {
+        const { data: purchase } = await supabase
+          .from('course_purchases')
+          .select('access_unlocks_at')
+          .eq('user_id', user.id)
+          .eq('course_id', courseData.id)
+          .maybeSingle()
+        const unlocksAt = purchase?.access_unlocks_at
+        if (unlocksAt && new Date(unlocksAt).getTime() > Date.now()) {
+          router.push(`/courses/${slug}`)
+          return
+        }
+      }
 
       const sortedLessons = (courseData.lessons ?? []).sort(
         (a: Lesson, b: Lesson) => a.order_index - b.order_index

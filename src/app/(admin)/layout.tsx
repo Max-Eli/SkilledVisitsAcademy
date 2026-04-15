@@ -8,12 +8,14 @@ import {
   Users,
   Settings,
   Shield,
+  CalendarDays,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 const adminNav = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/courses', label: 'Courses', icon: BookOpen },
+  { href: '/admin/cohorts', label: 'Cohorts', icon: CalendarDays },
   { href: '/admin/community', label: 'Community', icon: Users },
   { href: '/admin/subscribers', label: 'Subscribers', icon: Users },
 ]

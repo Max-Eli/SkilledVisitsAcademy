@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import { Geist_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { Toaster } from 'sonner'
 import { CartProvider } from '@/lib/cart'
 import './globals.css'
@@ -40,6 +41,7 @@ export default function RootLayout({
           {children}
         </CartProvider>
         <Toaster position="top-right" richColors />
+        <Script src="https://jidopay.com/embed.js" strategy="afterInteractive" />
       </body>
     </html>
   )

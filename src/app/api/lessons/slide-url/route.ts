@@ -41,13 +41,23 @@ export async function GET(request: Request) {
   if (profile?.role !== 'admin') {
     const { data: purchase } = await supabase
       .from('course_purchases')
-      .select('id')
+      .select('id, access_unlocks_at')
       .eq('user_id', user.id)
       .eq('course_id', lesson.course_id)
       .maybeSingle()
 
     if (!purchase) {
       return NextResponse.json({ error: 'Not enrolled in this course' }, { status: 403 })
+    }
+
+    if (
+      purchase.access_unlocks_at &&
+      new Date(purchase.access_unlocks_at).getTime() > Date.now()
+    ) {
+      return NextResponse.json(
+        { error: 'Course materials unlock 48 hours before your live session' },
+        { status: 403 }
+      )
     }
   }
 

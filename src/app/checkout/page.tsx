@@ -9,9 +9,71 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import {
   Eye, EyeOff, Loader2, ShieldCheck, Lock, CheckCircle,
+  CalendarDays, Users, Clock,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/lib/cart'
+import type { SvaCourseKey } from '@/lib/jidopay'
+
+// window.JidoPay is injected by the embed script loaded from jidopay.com.
+// The script attaches a global with open/close methods — we call open() here
+// to launch the checkout modal after the student creates their account.
+declare global {
+  interface Window {
+    JidoPay?: {
+      open: (
+        linkId: string,
+        opts?: {
+          theme?: string
+          autoload?: boolean
+          email?: string
+          clientRef?: string
+        }
+      ) => void
+      close: () => void
+    }
+  }
+}
+
+// Pull NEXT_PUBLIC_JIDOPAY_LINK_* values at bundle time so we can map
+// course keys to payment-link ids on the client. Any missing env var is
+// surfaced as an error on submit so the operator knows exactly which course
+// needs a JidoPay payment link configured.
+const JIDOPAY_LINK_IDS: Record<SvaCourseKey, string | undefined> = {
+  'iv-therapy-certification': process.env.NEXT_PUBLIC_JIDOPAY_LINK_IV_CERT,
+  'complete-mastery-bundle': process.env.NEXT_PUBLIC_JIDOPAY_LINK_BUNDLE,
+  'iv-complications-emergency': process.env.NEXT_PUBLIC_JIDOPAY_LINK_COMPLICATIONS,
+  'vitamin-nutrient-therapy': process.env.NEXT_PUBLIC_JIDOPAY_LINK_VITAMIN,
+  'nad-plus-masterclass': process.env.NEXT_PUBLIC_JIDOPAY_LINK_NAD,
+  'iv-push-administration': process.env.NEXT_PUBLIC_JIDOPAY_LINK_IV_PUSH,
+}
+
+type CohortOption = {
+  id: string
+  meetingAt: string
+  hasMeetingLink: boolean
+  seatsLeft: number
+}
+
+// JidoPay processing fee: 3.5% + $0.30. We gross-up the displayed total so
+// the merchant nets the advertised course price and the shopper sees the
+// fee as a line item — this is the same approach Shopify, Square Online, etc.
+// use when a merchant opts to pass the fee through.
+//
+// Math: net = gross - (0.035 * gross + 0.30)
+//       gross = (net + 0.30) / 0.965
+// Example: $299 net → $310.16 gross → $11.16 fee
+const FEE_PERCENT = 0.035
+const FEE_FIXED_CENTS = 30
+
+function grossUpCents(netCents: number): number {
+  const gross = (netCents + FEE_FIXED_CENTS) / (1 - FEE_PERCENT)
+  return Math.round(gross)
+}
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`
+}
 
 const LICENSE_TYPES = [
   { value: 'RN', label: 'RN — Registered Nurse' },
@@ -153,10 +215,14 @@ function CheckoutForm() {
 
   const { items: cartItems, clearCart } = useCart()
   const checkoutItems = cartMode ? cartItems : course ? [{ key: courseKey!, ...course }] : []
-  const totalInt = cartMode
+  const subtotalCents = cartMode
     ? cartItems.reduce((sum, i) => sum + i.priceInt, 0)
     : course?.priceInt ?? 0
-  const totalDisplay = cartMode ? `$${(totalInt / 100).toFixed(0)}` : (course?.price ?? '$0')
+  // Gross-up the sticker price so the shopper covers the JidoPay processing
+  // fee and the merchant nets the advertised amount.
+  const grossCents = subtotalCents > 0 ? grossUpCents(subtotalCents) : 0
+  const feeCents = grossCents - subtotalCents
+  const totalDisplay = formatCents(grossCents)
 
   const supabase = createClient()
 
@@ -171,6 +237,10 @@ function CheckoutForm() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [loggedInEmail, setLoggedInEmail] = useState('')
 
+  const [cohorts, setCohorts] = useState<CohortOption[]>([])
+  const [cohortsLoading, setCohortsLoading] = useState(true)
+  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
@@ -179,6 +249,42 @@ function CheckoutForm() {
       }
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load upcoming cohorts for the selected course. The core IV Therapy Cert
+  // cohort is used for the Complete Mastery Bundle too — the client's ops
+  // flow is that everyone in a given week attends the same live session.
+  useEffect(() => {
+    async function loadCohorts() {
+      const slug = cartMode
+        ? cartItems[0]?.key ?? null
+        : courseKey
+      if (!slug) {
+        setCohorts([])
+        setCohortsLoading(false)
+        return
+      }
+      const cohortSlug =
+        slug === 'complete-mastery-bundle' ? 'iv-therapy-certification' : slug
+      setCohortsLoading(true)
+      try {
+        const res = await fetch(
+          `/api/cohorts?courseSlug=${encodeURIComponent(cohortSlug)}`
+        )
+        const data = await res.json()
+        setCohorts(data.cohorts ?? [])
+        if ((data.cohorts ?? []).length > 0) {
+          setSelectedCohortId(data.cohorts[0].id)
+        } else {
+          setSelectedCohortId(null)
+        }
+      } catch {
+        setCohorts([])
+      } finally {
+        setCohortsLoading(false)
+      }
+    }
+    loadCohorts()
+  }, [courseKey, cartMode, cartItems])
 
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault()
@@ -202,10 +308,49 @@ function CheckoutForm() {
       }
     }
 
+    // JidoPay payment links are per-product, so a multi-item cart would have
+    // to chain multiple checkouts. For now we steer cart-mode shoppers to
+    // buy courses individually — which is also the default flow from any
+    // course landing page.
+    if (cartMode && cartItems.length > 1) {
+      toast.error(
+        'Please purchase courses individually. The Complete Mastery Bundle is the best value for multi-course access.'
+      )
+      return
+    }
+
+    // Single-item checkout: resolve the JidoPay payment link for this course.
+    const targetCourseKey = (
+      cartMode ? cartItems[0]?.key : courseKey
+    ) as SvaCourseKey | undefined
+    if (!targetCourseKey) {
+      toast.error('No course selected')
+      return
+    }
+    const linkId = JIDOPAY_LINK_IDS[targetCourseKey]
+    if (!linkId) {
+      toast.error(
+        'This course is not yet available for checkout. Please contact support.'
+      )
+      console.error(
+        '[checkout] missing NEXT_PUBLIC_JIDOPAY_LINK_* env var for',
+        targetCourseKey
+      )
+      return
+    }
+
+    if (!selectedCohortId) {
+      toast.error('Please pick a cohort date before continuing.')
+      return
+    }
+
     setLoading(true)
 
     try {
-      // Step 1: Create account if not logged in
+      // Step 1: Create the Supabase account (if not logged in) so we have a
+      // user to attach the purchase to when the webhook fires.
+      let studentEmail = loggedInEmail
+      let studentUserId: string | null = null
       if (!isLoggedIn) {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -226,36 +371,63 @@ function CheckoutForm() {
           return
         }
 
-        // Save license info
         if (data.user) {
-          await supabase.from('profiles').update({
-            license_type: licenseType,
-            license_number: licenseNumber.trim().toUpperCase(),
-            license_state: licenseState,
-          }).eq('id', data.user.id)
+          studentUserId = data.user.id
+          studentEmail = email
+          await supabase
+            .from('profiles')
+            .update({
+              license_type: licenseType,
+              license_number: licenseNumber.trim().toUpperCase(),
+              license_state: licenseState,
+            })
+            .eq('id', data.user.id)
         }
+      } else {
+        const { data: userData } = await supabase.auth.getUser()
+        studentUserId = userData.user?.id ?? null
       }
 
-      // Step 2: Create Square checkout
-      const res = await fetch('/api/square/checkout', {
+      // Step 1b: Stamp the checkout intent so the webhook knows which cohort
+      // this student picked. We use the course slug (not the bundle) as the
+      // intent key so the webhook's simple "most recent for user+course"
+      // lookup does the right thing for both single-course and bundle buys.
+      const intentRes = await fetch('/api/checkout-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          cartMode
-            ? { items: cartItems.map((i) => ({ key: i.key })) }
-            : { course: courseKey }
-        ),
+        body: JSON.stringify({
+          courseSlug: targetCourseKey,
+          cohortId: selectedCohortId,
+        }),
+      })
+      if (!intentRes.ok) {
+        toast.error('Could not save your cohort selection. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      // Step 2: Launch JidoPay checkout. The embed iframe escapes to the
+      // top window, sends the shopper to Stripe Checkout with their email
+      // pre-filled, and (on success) JidoPay fires the webhook that grants
+      // access. clientRef = Supabase uid gives the webhook an authoritative
+      // identifier in case the student types a different email in Stripe.
+      if (typeof window === 'undefined' || !window.JidoPay) {
+        toast.error('Checkout failed to load. Please refresh and try again.')
+        setLoading(false)
+        return
+      }
+
+      if (cartMode) clearCart()
+
+      window.JidoPay.open(linkId, {
+        autoload: true,
+        email: studentEmail || undefined,
+        clientRef: studentUserId ?? undefined,
       })
 
-      const data = await res.json()
-
-      if (data.url) {
-        if (cartMode) clearCart()
-        window.location.href = data.url
-      } else {
-        toast.error(data.error ?? 'Failed to start checkout. Please try again.')
-        setLoading(false)
-      }
+      // The embed takes over the window, so we don't clear loading state
+      // — if the shopper closes the modal and comes back, the page will
+      // have reloaded.
     } catch {
       toast.error('Something went wrong. Please try again.')
       setLoading(false)
@@ -413,8 +585,24 @@ function CheckoutForm() {
                   </>
                 )}
 
-                {/* Submit */}
+                {/* Cohort picker */}
                 <div className={!isLoggedIn ? 'border-t border-[#D9D9D9] pt-5' : ''}>
+                  <p className="text-xs font-semibold text-[#5B5B5B] uppercase tracking-wider mb-1">
+                    Choose your live session
+                  </p>
+                  <p className="text-xs text-[#5B5B5B] mb-4">
+                    Pick a virtual meeting date. Course materials unlock 48 hours before your session so you can prep.
+                  </p>
+                  <CohortPicker
+                    cohorts={cohorts}
+                    loading={cohortsLoading}
+                    selectedId={selectedCohortId}
+                    onSelect={setSelectedCohortId}
+                  />
+                </div>
+
+                {/* Submit */}
+                <div className="border-t border-[#D9D9D9] pt-5">
                   <p className="text-xs text-[#5B5B5B] mb-4">
                     By completing your purchase, you agree to our{' '}
                     <Link href="/terms" className="text-[#9E50E5] hover:underline">Terms of Service</Link>{' '}
@@ -435,11 +623,11 @@ function CheckoutForm() {
                   <div className="flex items-center justify-center gap-4 mt-4">
                     <div className="flex items-center gap-1.5 text-xs text-[#5B5B5B]">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                      Secure payment via Square
+                      Secure payment via JidoPay
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-[#5B5B5B]">
-                      <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                      Instant access after payment
+                      <Clock className="h-3.5 w-3.5 text-emerald-500" />
+                      Access unlocks 48h before your session
                     </div>
                   </div>
                 </div>
@@ -488,12 +676,20 @@ function CheckoutForm() {
                   </>
                 ) : null}
 
-                <div className="border-t border-[#D9D9D9] pt-5">
-                  <div className="flex items-center justify-between mb-1">
+                <div className="border-t border-[#D9D9D9] pt-5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#5B5B5B]">Subtotal</span>
+                    <span className="text-sm font-semibold text-[#1a1a1a]">{formatCents(subtotalCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#5B5B5B]">Processing fee</span>
+                    <span className="text-sm font-semibold text-[#1a1a1a]">{formatCents(feeCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
                     <span className="text-sm text-[#5B5B5B]">Access</span>
                     <span className="text-sm font-semibold text-emerald-600">Lifetime</span>
                   </div>
-                  <div className="border-t border-[#D9D9D9] mt-4 pt-4 flex items-center justify-between">
+                  <div className="border-t border-[#D9D9D9] mt-3 pt-3 flex items-center justify-between">
                     <span className="text-base font-bold text-[#1a1a1a]">Total today</span>
                     <span className="text-xl font-extrabold text-[#9E50E5]">{totalDisplay}</span>
                   </div>
@@ -526,6 +722,119 @@ function CheckoutForm() {
 
         </div>
       </div>
+    </div>
+  )
+}
+
+function CohortPicker({
+  cohorts,
+  loading,
+  selectedId,
+  onSelect,
+}: {
+  cohorts: CohortOption[]
+  loading: boolean
+  selectedId: string | null
+  onSelect: (id: string) => void
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-xl border border-[#D9D9D9] bg-[#FAFAFA] p-6 text-sm text-[#5B5B5B]">
+        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        Loading available sessions…
+      </div>
+    )
+  }
+
+  if (cohorts.length === 0) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <p className="font-semibold">No upcoming sessions scheduled.</p>
+        <p className="mt-1 text-xs">
+          Please contact{' '}
+          <a href="mailto:support@skilledvisitsacademy.com" className="underline">
+            support@skilledvisitsacademy.com
+          </a>{' '}
+          — new cohort dates are added regularly.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {cohorts.map((cohort) => {
+        const meetingDate = new Date(cohort.meetingAt)
+        const dateStr = meetingDate.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        })
+        const timeStr = meetingDate.toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+        const tzAbbr =
+          meetingDate
+            .toLocaleDateString(undefined, { timeZoneName: 'short' })
+            .split(' ')
+            .pop() ?? ''
+        const unlockDate = new Date(meetingDate.getTime() - 48 * 60 * 60 * 1000)
+        const unlockStr = unlockDate.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })
+        const isSelected = cohort.id === selectedId
+        const scarce = cohort.seatsLeft <= 5
+
+        return (
+          <button
+            key={cohort.id}
+            type="button"
+            onClick={() => onSelect(cohort.id)}
+            className={`w-full text-left rounded-xl border p-4 transition-all ${
+              isSelected
+                ? 'border-[#9E50E5] bg-[#FBF6FF] ring-2 ring-[#9E50E5]/20'
+                : 'border-[#D9D9D9] bg-white hover:border-[#9E50E5]/50 hover:bg-[#FBF6FF]/30'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                  isSelected ? 'bg-[#9E50E5] text-white' : 'bg-[#FBF6FF] text-[#9E50E5]'
+                }`}
+              >
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-[#1a1a1a]">
+                    {dateStr} · {timeStr} {tzAbbr}
+                  </p>
+                  {scarce && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                      <Users className="h-2.5 w-2.5" />
+                      Only {cohort.seatsLeft} seat{cohort.seatsLeft === 1 ? '' : 's'} left
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-[#5B5B5B]">
+                  Access unlocks {unlockStr} (48h before)
+                </p>
+              </div>
+              <div
+                className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                  isSelected
+                    ? 'border-[#9E50E5] bg-[#9E50E5]'
+                    : 'border-[#D9D9D9] bg-white'
+                }`}
+              >
+                {isSelected && <CheckCircle className="h-3 w-3 text-white" />}
+              </div>
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }
