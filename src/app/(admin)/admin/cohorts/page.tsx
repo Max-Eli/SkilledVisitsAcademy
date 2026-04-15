@@ -60,6 +60,13 @@ export default function AdminCohortsPage() {
   const [newLink, setNewLink] = useState('')
   const [newSeats, setNewSeats] = useState('15')
 
+  const [showBulk, setShowBulk] = useState(false)
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkDate, setBulkDate] = useState('')
+  const [bulkTime, setBulkTime] = useState('18:00')
+  const [bulkLink, setBulkLink] = useState('')
+  const [bulkSeats, setBulkSeats] = useState('15')
+
   useEffect(() => {
     load()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -141,6 +148,58 @@ export default function AdminCohortsPage() {
     )
   }
 
+  async function createBulkCohort() {
+    if (!bulkDate || !bulkTime) {
+      toast.error('Pick a date and time first')
+      return
+    }
+    if (courses.length === 0) {
+      toast.error('No courses loaded')
+      return
+    }
+    setBulkSaving(true)
+
+    // Same meeting_at across every course so the multi-item checkout can
+    // resolve per-course cohorts by timestamp match. Skip any course that
+    // already has a cohort at this moment to keep bulk-create idempotent.
+    const meetingAt = new Date(`${bulkDate}T${bulkTime}`).toISOString()
+    const existing = new Set(
+      cohorts
+        .filter((c) => c.meeting_at === meetingAt)
+        .map((c) => c.course_id)
+    )
+    const rows = courses
+      .filter((c) => !existing.has(c.id))
+      .map((c) => ({
+        course_id: c.id,
+        meeting_at: meetingAt,
+        meeting_link: bulkLink.trim() || null,
+        seats_cap: Number(bulkSeats) || 15,
+        active: true,
+      }))
+
+    if (rows.length === 0) {
+      toast.success('All courses already have a cohort at that time')
+      setShowBulk(false)
+      setBulkSaving(false)
+      return
+    }
+
+    const { error } = await supabase.from('course_cohorts').insert(rows)
+    if (error) {
+      toast.error('Failed to bulk-create cohorts')
+    } else {
+      toast.success(`Created ${rows.length} cohort${rows.length === 1 ? '' : 's'}`)
+      setShowBulk(false)
+      setBulkDate('')
+      setBulkTime('18:00')
+      setBulkLink('')
+      setBulkSeats('15')
+      await load()
+    }
+    setBulkSaving(false)
+  }
+
   async function deleteCohort(cohortId: string) {
     if (!confirm('Delete this cohort? Existing enrollments will lose their meeting reference.')) return
     const { error } = await supabase.from('course_cohorts').delete().eq('id', cohortId)
@@ -168,10 +227,20 @@ export default function AdminCohortsPage() {
             Schedule live Zoom/Meet sessions. Course access unlocks 48h before each meeting.
           </p>
         </div>
-        <Button onClick={() => setShowNew(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Cohort
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowBulk(true)}
+            variant="outline"
+            className="gap-2"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Schedule all courses
+          </Button>
+          <Button onClick={() => setShowNew(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Cohort
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -223,6 +292,63 @@ export default function AdminCohortsPage() {
           })}
         </div>
       )}
+
+      <Dialog open={showBulk} onOpenChange={setShowBulk}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule every course on one date</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Creates an identical cohort across all {courses.length} courses at the same meeting time. Use this so multi-course cart purchases can share a single live session. Existing cohorts at that exact time are left untouched.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Meeting date</Label>
+                <Input
+                  type="date"
+                  value={bulkDate}
+                  onChange={(e) => setBulkDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Start time</Label>
+                <Input
+                  type="time"
+                  value={bulkTime}
+                  onChange={(e) => setBulkTime(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Zoom / Google Meet link (optional — can add later)</Label>
+              <Input
+                placeholder="https://zoom.us/j/… or https://meet.google.com/…"
+                value={bulkLink}
+                onChange={(e) => setBulkLink(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Display seat cap</Label>
+              <Input
+                type="number"
+                min="1"
+                value={bulkSeats}
+                onChange={(e) => setBulkSeats(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulk(false)}>
+              Cancel
+            </Button>
+            <Button onClick={createBulkCohort} disabled={bulkSaving} className="gap-2">
+              {bulkSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Schedule all
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>

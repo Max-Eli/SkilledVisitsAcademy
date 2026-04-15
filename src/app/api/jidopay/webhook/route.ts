@@ -77,17 +77,52 @@ export async function POST(request: Request) {
   }
 
   const data = event.data ?? {}
-  const courseKey = linkIdToCourseKey(data.paymentLinkId ?? null)
   const customerEmail = data.customerEmail?.toLowerCase().trim() ?? null
 
-  if (!courseKey) {
+  // Two paths:
+  //  1. Dynamic-checkout path (preferred): metadata.sva_courses carries the
+  //     comma-joined list of SVA course keys the student purchased, and
+  //     metadata.sva_cohort_meeting_at pins the live session they chose.
+  //     The new /api/checkout/create route stamps these on every session.
+  //  2. Legacy paymentLinkId path: pre-created payment links in the Jibul
+  //     dashboard, resolved via NEXT_PUBLIC_JIDOPAY_LINK_* env vars and the
+  //     checkout_intents row the old checkout page writes.
+  const metadataRaw = (data.metadata ?? {}) as Record<string, unknown>
+  const metaCourses = typeof metadataRaw.sva_courses === 'string'
+    ? (metadataRaw.sva_courses as string)
+    : null
+  const metaMeetingAt = typeof metadataRaw.sva_cohort_meeting_at === 'string'
+    ? (metadataRaw.sva_cohort_meeting_at as string)
+    : null
+
+  const courseKeysFromMeta: SvaCourseKey[] = metaCourses
+    ? metaCourses
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is SvaCourseKey =>
+          [
+            'iv-therapy-certification',
+            'complete-mastery-bundle',
+            'iv-complications-emergency',
+            'vitamin-nutrient-therapy',
+            'nad-plus-masterclass',
+            'iv-push-administration',
+          ].includes(s)
+        )
+    : []
+
+  const legacyCourseKey = courseKeysFromMeta.length === 0
+    ? linkIdToCourseKey(data.paymentLinkId ?? null)
+    : null
+
+  if (courseKeysFromMeta.length === 0 && !legacyCourseKey) {
     console.error(
-      '[jidopay-webhook] unknown paymentLinkId — map a NEXT_PUBLIC_JIDOPAY_LINK_* env var',
-      data.paymentLinkId
+      '[jidopay-webhook] session missing both sva_courses metadata and a known paymentLinkId',
+      { paymentLinkId: data.paymentLinkId, metadata: metadataRaw }
     )
     return NextResponse.json(
-      { error: 'Unknown paymentLinkId' },
-      { status: 200 } // 200 so JidoPay doesn't retry — this is an operator bug, not a transient failure
+      { error: 'Unknown course selection' },
+      { status: 200 } // 200 so JidoPay doesn't retry — operator bug, not transient
     )
   }
 
@@ -148,62 +183,94 @@ export async function POST(request: Request) {
   const amountPaid = data.amountTotal ?? 0
   const paymentId = data.sessionId ?? event.id ?? 'jidopay-unknown'
 
-  // Look up the student's cohort pick from the most recent unconsumed
-  // checkout_intent row. The checkout page stamps this right before opening
-  // the JidoPay embed, so it's always fresh. If there's no intent on file,
-  // the purchase still goes through — access just won't be gated on a
-  // cohort date (falls back to the legacy "unlock immediately" behavior).
-  const { data: intent } = await supabase
-    .from('checkout_intents')
-    .select('id, cohort_id')
-    .eq('user_id', userId)
-    .eq('course_slug', courseKey)
-    .is('consumed_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  let cohortId: string | null = intent?.cohort_id ?? null
-  let meetingAt: string | null = null
+  // Resolve the meeting time + shared "access unlocks 48h before" timestamp.
+  // Two sources depending on the path above:
+  //  - Metadata path: sva_cohort_meeting_at is an authoritative ISO string
+  //    stamped by the server at checkout-create time.
+  //  - Legacy path: fall back to the most-recent checkout_intent row for
+  //    this user + course.
+  let meetingAt: string | null = metaMeetingAt
   let meetingLink: string | null = null
-  let accessUnlocksAt: string | null = null
-
-  if (cohortId) {
-    const { data: cohort } = await supabase
-      .from('course_cohorts')
-      .select('meeting_at, meeting_link')
-      .eq('id', cohortId)
-      .maybeSingle()
-    if (cohort) {
-      meetingAt = cohort.meeting_at
-      meetingLink = cohort.meeting_link
-      // 48 hours before the meeting — denormalized onto the purchase row
-      // so the course-gating query stays a single column read.
-      accessUnlocksAt = new Date(
-        new Date(cohort.meeting_at).getTime() - 48 * 60 * 60 * 1000
+  let accessUnlocksAt: string | null = metaMeetingAt
+    ? new Date(
+        new Date(metaMeetingAt).getTime() - 48 * 60 * 60 * 1000
       ).toISOString()
+    : null
+
+  let legacyIntentId: string | null = null
+  let legacyCohortId: string | null = null
+  if (courseKeysFromMeta.length === 0 && legacyCourseKey) {
+    const { data: intent } = await supabase
+      .from('checkout_intents')
+      .select('id, cohort_id')
+      .eq('user_id', userId)
+      .eq('course_slug', legacyCourseKey)
+      .is('consumed_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    legacyIntentId = intent?.id ?? null
+    legacyCohortId = intent?.cohort_id ?? null
+
+    if (legacyCohortId) {
+      const { data: cohort } = await supabase
+        .from('course_cohorts')
+        .select('meeting_at, meeting_link')
+        .eq('id', legacyCohortId)
+        .maybeSingle()
+      if (cohort) {
+        meetingAt = cohort.meeting_at
+        meetingLink = cohort.meeting_link
+        accessUnlocksAt = new Date(
+          new Date(cohort.meeting_at).getTime() - 48 * 60 * 60 * 1000
+        ).toISOString()
+      }
     }
   }
 
-  if (intent?.id) {
+  if (legacyIntentId) {
     await supabase
       .from('checkout_intents')
       .update({ consumed_at: new Date().toISOString() })
-      .eq('id', intent.id)
+      .eq('id', legacyIntentId)
   }
 
   // Grant course access. Bundle expands to every core + addon course, matching
   // the Square webhook's behavior so existing LMS gating continues to work.
-  const coursesGranted = await grantCourseAccess({
-    supabase,
-    userId,
-    courseKey,
-    paymentId,
-    linkId: data.paymentLinkId ?? null,
-    cohortId,
-    accessUnlocksAt,
-    amountPaid,
-  })
+  // Multi-item carts iterate every key from metadata and grant each.
+  const coursesGranted = courseKeysFromMeta.length > 0
+    ? await grantManyCourses({
+        supabase,
+        userId,
+        courseKeys: courseKeysFromMeta,
+        paymentId,
+        meetingAt,
+        accessUnlocksAt,
+        amountPaid,
+      })
+    : await grantCourseAccess({
+        supabase,
+        userId,
+        courseKey: legacyCourseKey!,
+        paymentId,
+        linkId: data.paymentLinkId ?? null,
+        cohortId: legacyCohortId,
+        accessUnlocksAt,
+        amountPaid,
+      })
+
+  // Resolve the meeting link for the email from any one of the granted
+  // courses' cohort rows (they all share meetingAt, so the link is the same).
+  if (!meetingLink && meetingAt) {
+    const { data: linkRow } = await supabase
+      .from('course_cohorts')
+      .select('meeting_link')
+      .eq('meeting_at', meetingAt)
+      .not('meeting_link', 'is', null)
+      .limit(1)
+      .maybeSingle()
+    meetingLink = linkRow?.meeting_link ?? null
+  }
 
   // Mark the profile as a subscriber so the dashboard renders the paid UI.
   await supabase
@@ -326,4 +393,89 @@ async function grantCourseAccess({
   )
 
   return [courseKey]
+}
+
+// Grant access for a multi-item dynamic checkout. Each course key is
+// processed individually so the bundle expansion rules still apply. Per-
+// course cohort ids are resolved by matching the shared `meetingAt` against
+// each course's own course_cohorts row — admin's bulk-schedule flow creates
+// them with the same meeting_at, which keeps the FK intact.
+async function grantManyCourses({
+  supabase,
+  userId,
+  courseKeys,
+  paymentId,
+  meetingAt,
+  accessUnlocksAt,
+  amountPaid,
+}: {
+  supabase: SupabaseServiceClient
+  userId: string
+  courseKeys: SvaCourseKey[]
+  paymentId: string
+  meetingAt: string | null
+  accessUnlocksAt: string | null
+  amountPaid: number
+}): Promise<SvaCourseKey[]> {
+  // Pre-resolve the cohort id for every course at the shared meeting time so
+  // each purchase row carries its own course-specific cohort_id (FK safety).
+  const cohortByCourseId = new Map<string, string | null>()
+  if (meetingAt) {
+    const { data: matchingCohorts } = await supabase
+      .from('course_cohorts')
+      .select('id, course_id, meeting_at')
+      .eq('meeting_at', meetingAt)
+    for (const c of matchingCohorts ?? []) {
+      cohortByCourseId.set(c.course_id, c.id)
+    }
+  }
+
+  const granted: SvaCourseKey[] = []
+  for (const key of courseKeys) {
+    if (key === 'complete-mastery-bundle') {
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id, slug')
+        .in('course_type', ['core', 'addon'])
+      for (const course of courses ?? []) {
+        await supabase.from('course_purchases').upsert(
+          {
+            user_id: userId,
+            course_id: course.id,
+            jidopay_session_id: paymentId,
+            jidopay_payment_link_id: null,
+            cohort_id: cohortByCourseId.get(course.id) ?? null,
+            access_unlocks_at: accessUnlocksAt,
+            amount_paid: amountPaid,
+          },
+          { onConflict: 'user_id,course_id' }
+        )
+      }
+      granted.push('complete-mastery-bundle')
+      continue
+    }
+
+    const { data: course } = await supabase
+      .from('courses')
+      .select('id')
+      .eq('slug', key)
+      .single()
+    if (!course) continue
+
+    await supabase.from('course_purchases').upsert(
+      {
+        user_id: userId,
+        course_id: course.id,
+        jidopay_session_id: paymentId,
+        jidopay_payment_link_id: null,
+        cohort_id: cohortByCourseId.get(course.id) ?? null,
+        access_unlocks_at: accessUnlocksAt,
+        amount_paid: amountPaid,
+      },
+      { onConflict: 'user_id,course_id' }
+    )
+    granted.push(key)
+  }
+
+  return granted
 }

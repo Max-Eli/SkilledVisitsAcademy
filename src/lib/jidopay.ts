@@ -61,6 +61,30 @@ export const COURSE_PRICES: Record<SvaCourseKey, string> = {
   'iv-push-administration': '$149',
 }
 
+// Server-authoritative course prices in cents. The checkout create route
+// reads these (never the client-supplied amount) so a tampered cart can't
+// lower the price paid.
+export const COURSE_PRICES_CENTS: Record<SvaCourseKey, number> = {
+  'iv-therapy-certification': 29900,
+  'complete-mastery-bundle': 49900,
+  'iv-complications-emergency': 14900,
+  'vitamin-nutrient-therapy': 14900,
+  'nad-plus-masterclass': 14900,
+  'iv-push-administration': 14900,
+}
+
+// JidoPay processing fee that the shopper covers on top of the sticker
+// price: 3.5% + $0.30. We gross up the SVA cart subtotal so the merchant
+// nets the advertised course price.
+const FEE_PERCENT = 0.035
+const FEE_FIXED_CENTS = 30
+
+export function grossUpCents(netCents: number): number {
+  if (netCents <= 0) return 0
+  const gross = (netCents + FEE_FIXED_CENTS) / (1 - FEE_PERCENT)
+  return Math.round(gross)
+}
+
 // ---------------------------------------------------------------------------
 // Signature verification
 //
