@@ -42,9 +42,12 @@ export default async function CourseDetailPage({
 
   if (!course) notFound()
 
-  // Access gating: unless the user is an admin, check the purchase row for a
-  // cohort-based unlock time. Course materials open 48h before the live session
-  // so students can prep. No purchase = treat as locked (redirect to checkout).
+  // Access gating:
+  //  - Admins always see everything.
+  //  - Students must have a course_purchases row for THIS course. No row →
+  //    bounce to the public marketing page so they can buy.
+  //  - If they have a purchase and access_unlocks_at is still in the future,
+  //    render the locked state with their cohort meeting details.
   const isAdmin = profile?.role === 'admin'
   let lockedUntil: string | null = null
   let cohortMeetingAt: string | null = null
@@ -58,10 +61,14 @@ export default async function CourseDetailPage({
       .eq('course_id', course.id)
       .maybeSingle()
 
-    const unlocksAt = purchase?.access_unlocks_at
+    if (!purchase) {
+      redirect(`/course/${slug}`)
+    }
+
+    const unlocksAt = purchase.access_unlocks_at
     if (unlocksAt && new Date(unlocksAt).getTime() > Date.now()) {
       lockedUntil = unlocksAt
-      if (purchase?.cohort_id) {
+      if (purchase.cohort_id) {
         const { data: cohort } = await supabase
           .from('course_cohorts')
           .select('meeting_at, meeting_link')

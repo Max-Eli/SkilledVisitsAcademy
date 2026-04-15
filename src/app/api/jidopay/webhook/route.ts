@@ -151,21 +151,18 @@ export async function POST(request: Request) {
   }
 
   if (!userId && customerEmail) {
-    // auth.admin.listUsers doesn't support filtering by email directly; the
-    // pragmatic path is to query the profiles table (which mirrors auth.users
-    // on insert via a trigger) or use the profiles email column if present.
-    // Here we hit auth.admin.listUsers and find the match — safe for SVA's
-    // scale and avoids coupling to profile schema details.
-    const { data: listed } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    })
-    const match = listed?.users.find(
-      (u) => u.email?.toLowerCase() === customerEmail
-    )
-    if (match) {
-      userId = match.id
-      userEmail = match.email ?? customerEmail
+    // Look the user up directly via the `profiles.email` column, which is
+    // mirrored from auth.users by a Supabase trigger. The earlier approach
+    // (auth.admin.listUsers with perPage: 200) silently failed for user #201+
+    // as the learner base grew — profiles lookup scales to any size.
+    const { data: profileMatch } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .ilike('email', customerEmail)
+      .maybeSingle()
+    if (profileMatch) {
+      userId = profileMatch.id
+      userEmail = profileMatch.email ?? customerEmail
     }
   }
 

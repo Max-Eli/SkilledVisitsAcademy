@@ -64,8 +64,10 @@ export default function LessonPage() {
 
       if (!courseData) { router.push('/courses'); return }
 
-      // Bounce to the course overview (which renders the locked state with
-      // meeting details) if the cohort unlock time hasn't passed.
+      // Access gating. Admins bypass. Students need a course_purchases row —
+      // no row sends them to the public sales page. An unlock time still in
+      // the future bounces to the course overview which renders the locked
+      // state with meeting details.
       if (profileData?.role !== 'admin') {
         const { data: purchase } = await supabase
           .from('course_purchases')
@@ -73,7 +75,11 @@ export default function LessonPage() {
           .eq('user_id', user.id)
           .eq('course_id', courseData.id)
           .maybeSingle()
-        const unlocksAt = purchase?.access_unlocks_at
+        if (!purchase) {
+          router.push(`/course/${slug}`)
+          return
+        }
+        const unlocksAt = purchase.access_unlocks_at
         if (unlocksAt && new Date(unlocksAt).getTime() > Date.now()) {
           router.push(`/courses/${slug}`)
           return
