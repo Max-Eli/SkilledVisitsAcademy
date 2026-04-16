@@ -167,7 +167,7 @@ export default function CartPage() {
                 <div className="flex flex-col gap-2 mt-4">
                   <div className="flex items-center justify-center gap-1.5 text-xs text-[#5B5B5B]">
                     <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    Secure payment via Square
+                    Secure payment via JidoPay
                   </div>
                   <div className="flex items-center justify-center gap-1.5 text-xs text-[#5B5B5B]">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />

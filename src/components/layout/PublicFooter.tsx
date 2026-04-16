@@ -41,9 +41,9 @@ export function PublicFooter() {
             <p className="text-sm font-semibold text-white mb-4">Courses</p>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/course/iv-therapy-certification" className="hover:text-white transition-colors">IV Therapy Certification</Link></li>
-              <li><Link href="/course/complete-mastery-bundle" className="hover:text-white transition-colors">Complete Mastery Bundle</Link></li>
-              <li><Link href="/course/nad-plus-masterclass" className="hover:text-white transition-colors">NAD+ Therapy Masterclass</Link></li>
-              <li><Link href="/course/iv-push-administration" className="hover:text-white transition-colors">IV Push Administration</Link></li>
+              <li><Link href="/course/complete-mastery-bundle" className="hover:text-white transition-colors">Complete IV Mastery Bundle</Link></li>
+              <li><Link href="/course/aesthetic-injections-certification" className="hover:text-white transition-colors">Aesthetic Injections Certification</Link></li>
+              <li><Link href="/course/aesthetic-mastery-bundle" className="hover:text-white transition-colors">Complete Aesthetic Mastery Bundle</Link></li>
             </ul>
           </div>
 

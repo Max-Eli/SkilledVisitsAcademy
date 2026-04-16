@@ -7,15 +7,49 @@ import { createHmac, timingSafeEqual } from 'crypto'
 // without a code change. Set these in Vercel → Project → Settings → Env Vars.
 
 export type SvaCourseKey =
+  // IV Therapy lane
   | 'iv-therapy-certification'
   | 'complete-mastery-bundle'
   | 'iv-complications-emergency'
   | 'vitamin-nutrient-therapy'
   | 'nad-plus-masterclass'
   | 'iv-push-administration'
+  // Aesthetic Injection lane
+  | 'aesthetic-injections-certification'
+  | 'aesthetic-mastery-bundle'
+  | 'dermal-fillers'
+  | 'botox'
+  | 'prf-therapy'
+  | 'prf-ezgel'
+
+// Bundle pseudo-SKUs — they have no `courses` row. The webhook expands
+// each bundle key into the real rows it grants. Helpers use this to
+// enumerate the lanes without string-matching in five places.
+export const IV_BUNDLE_KEY = 'complete-mastery-bundle' as const
+export const AESTHETIC_BUNDLE_KEY = 'aesthetic-mastery-bundle' as const
+export const BUNDLE_KEYS: readonly SvaCourseKey[] = [
+  IV_BUNDLE_KEY,
+  AESTHETIC_BUNDLE_KEY,
+]
+
+// For each bundle, the course_type values that get expanded. Kept here so
+// the webhook (server) and storefront (client) agree on what a bundle means.
+export const BUNDLE_EXPANSION: Record<
+  typeof IV_BUNDLE_KEY | typeof AESTHETIC_BUNDLE_KEY,
+  string[]
+> = {
+  [IV_BUNDLE_KEY]: ['core', 'addon'],
+  [AESTHETIC_BUNDLE_KEY]: ['aesthetic'],
+}
 
 // Public (client-side readable) — used by the checkout page to pick the
 // right payment link for the course the student chose.
+// Legacy pre-created payment-link map. The dynamic checkout flow (used by
+// the cart and by all aesthetic courses) doesn't rely on this at all — it
+// exists only so the webhook's legacy path can still resolve a paymentLinkId
+// for any old IV payment links still in flight from before the dynamic
+// switchover. Aesthetic courses intentionally have no legacy entries because
+// they were born into the dynamic-checkout world.
 export const COURSE_TO_LINK_ENV: Record<SvaCourseKey, string> = {
   'iv-therapy-certification': 'NEXT_PUBLIC_JIDOPAY_LINK_IV_CERT',
   'complete-mastery-bundle': 'NEXT_PUBLIC_JIDOPAY_LINK_BUNDLE',
@@ -23,6 +57,12 @@ export const COURSE_TO_LINK_ENV: Record<SvaCourseKey, string> = {
   'vitamin-nutrient-therapy': 'NEXT_PUBLIC_JIDOPAY_LINK_VITAMIN',
   'nad-plus-masterclass': 'NEXT_PUBLIC_JIDOPAY_LINK_NAD',
   'iv-push-administration': 'NEXT_PUBLIC_JIDOPAY_LINK_IV_PUSH',
+  'aesthetic-injections-certification': '',
+  'aesthetic-mastery-bundle': '',
+  'dermal-fillers': '',
+  'botox': '',
+  'prf-therapy': '',
+  'prf-ezgel': '',
 }
 
 // Server-side reverse map — resolves an incoming webhook's paymentLinkId back
@@ -50,6 +90,12 @@ export const COURSE_TITLES: Record<SvaCourseKey, string> = {
   'vitamin-nutrient-therapy': 'Vitamin & Nutrient Therapy Masterclass',
   'nad-plus-masterclass': 'NAD+ Therapy Masterclass',
   'iv-push-administration': 'IV Push Administration Masterclass',
+  'aesthetic-injections-certification': 'Aesthetic Injections Certification',
+  'aesthetic-mastery-bundle': 'Complete Aesthetic Injections Mastery Bundle',
+  'dermal-fillers': 'Dermal Fillers Masterclass',
+  'botox': 'Botox (Neurotoxin) Masterclass',
+  'prf-therapy': 'PRF Therapy Masterclass',
+  'prf-ezgel': 'PRF EZGel Masterclass',
 }
 
 export const COURSE_PRICES: Record<SvaCourseKey, string> = {
@@ -59,6 +105,12 @@ export const COURSE_PRICES: Record<SvaCourseKey, string> = {
   'vitamin-nutrient-therapy': '$149',
   'nad-plus-masterclass': '$149',
   'iv-push-administration': '$149',
+  'aesthetic-injections-certification': '$299',
+  'aesthetic-mastery-bundle': '$499',
+  'dermal-fillers': '$149',
+  'botox': '$149',
+  'prf-therapy': '$149',
+  'prf-ezgel': '$149',
 }
 
 // Server-authoritative course prices in cents. The checkout create route
@@ -71,6 +123,12 @@ export const COURSE_PRICES_CENTS: Record<SvaCourseKey, number> = {
   'vitamin-nutrient-therapy': 14900,
   'nad-plus-masterclass': 14900,
   'iv-push-administration': 14900,
+  'aesthetic-injections-certification': 29900,
+  'aesthetic-mastery-bundle': 49900,
+  'dermal-fillers': 14900,
+  'botox': 14900,
+  'prf-therapy': 14900,
+  'prf-ezgel': 14900,
 }
 
 // JidoPay processing fee that the shopper covers on top of the sticker

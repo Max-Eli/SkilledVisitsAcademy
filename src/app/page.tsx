@@ -21,7 +21,7 @@ const features = [
     icon: BookOpen,
     title: 'Expert Video Courses',
     description:
-      'Professionally produced IV therapy courses covering technique, protocols, and clinical application.',
+      'Professionally produced certifications and masterclasses across IV therapy and aesthetic injections.',
   },
   {
     icon: Users,
@@ -113,20 +113,20 @@ export default function LandingPage() {
             <div className="flex-1 text-center lg:text-left">
               <AnimateOnScroll delay={0}>
                 <div className="inline-block px-4 py-1.5 rounded-full bg-[#FBF6FF] border border-[#9E50E5]/25 text-[#9E50E5] text-sm font-medium mb-7">
-                  Built for IV Therapy Professionals
+                  Clinical education for IV & aesthetic providers
                 </div>
               </AnimateOnScroll>
 
               <AnimateOnScroll delay={80}>
                 <h1 className="text-[2.6rem] sm:text-[3.2rem] lg:text-[3.6rem] font-extrabold leading-[1.1] tracking-tight text-[#1a1a1a] mb-6">
-                  Master IV Therapy.<br />
+                  IV Therapy & Aesthetics.<br />
                   <span className="text-[#9E50E5]">Practice With Confidence.</span>
                 </h1>
               </AnimateOnScroll>
 
               <AnimateOnScroll delay={160}>
                 <p className="text-lg text-[#5B5B5B] leading-relaxed mb-9 max-w-lg mx-auto lg:mx-0">
-                  Expert video courses, AI-powered lab analysis, clinical decision tools, and a professional community — everything a mobile IV provider needs, in one platform.
+                  Expert certification courses and advanced masterclasses across IV therapy and aesthetic injections — plus AI-powered clinical decision tools and a professional community, all in one platform.
                 </p>
               </AnimateOnScroll>
 
@@ -204,7 +204,7 @@ export default function LandingPage() {
               Everything you need to practice at the highest level
             </h2>
             <p className="text-lg text-[#5B5B5B] max-w-2xl mx-auto leading-relaxed">
-              From foundational education to advanced clinical decision support — built specifically for IV therapy practitioners.
+              From foundational certifications to advanced clinical decision support — built for IV therapy and aesthetic injection practitioners.
             </p>
           </AnimateOnScroll>
 
@@ -306,10 +306,10 @@ export default function LandingPage() {
       <section className="bg-[#9E50E5] py-[90px]">
         <AnimateOnScroll className="mx-auto max-w-[800px] px-4 sm:px-6 text-center">
           <h2 className="text-[2rem] md:text-[2.8rem] font-bold text-white mb-5">
-            Ready to elevate your IV practice?
+            Ready to elevate your practice?
           </h2>
           <p className="text-lg text-white/75 mb-10 leading-relaxed">
-            Join hundreds of IV therapy professionals learning smarter, practicing confidently, and staying ahead.
+            Join hundreds of IV therapy and aesthetic injection providers learning smarter, practicing confidently, and staying ahead.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link

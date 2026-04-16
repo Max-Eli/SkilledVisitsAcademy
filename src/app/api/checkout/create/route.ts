@@ -29,6 +29,12 @@ const VALID_COURSE_KEYS: SvaCourseKey[] = [
   'vitamin-nutrient-therapy',
   'nad-plus-masterclass',
   'iv-push-administration',
+  'aesthetic-injections-certification',
+  'aesthetic-mastery-bundle',
+  'dermal-fillers',
+  'botox',
+  'prf-therapy',
+  'prf-ezgel',
 ]
 
 export async function POST(request: Request) {

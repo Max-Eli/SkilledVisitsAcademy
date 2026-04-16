@@ -141,13 +141,164 @@ const COURSES = [
       'Safety considerations & monitoring',
     ],
   },
+  // ---- Aesthetic Injection lane --------------------------------------------
+  // Hidden from the storefront until published=true in the DB (UI visibility
+  // gated by the `visible` field). Keep the catalog entries in code so the
+  // moment pricing + cohort dates are locked in, flipping `visible: true`
+  // ships the aesthetic lane live.
+  {
+    key: 'aesthetic-injections-certification',
+    category: 'aesthetic-core',
+    lane: 'aesthetic',
+    badge: 'Core Course',
+    badgeBg: 'bg-[#9E50E5] text-white',
+    featured: true,
+    visible: false,
+    title: 'Aesthetic Injections Certification',
+    subtitle: 'Core Certification — Aesthetic Injections',
+    price: '$299',
+    priceInt: 29900,
+    type: 'One-time · Lifetime access',
+    description: 'The foundational aesthetic injection certification for licensed healthcare professionals. Facial anatomy, injection technique, product selection, complication management, and legal scope.',
+    includes: [
+      'Facial anatomy & danger zones',
+      'Product pharmacology & selection',
+      'Injection techniques & depth',
+      'Consent, documentation & scope of practice',
+      'Complication recognition & management',
+      'Pre- and post-procedure protocols',
+      'Certificate of completion',
+    ],
+  },
+  {
+    key: 'aesthetic-mastery-bundle',
+    category: 'aesthetic-bundle',
+    lane: 'aesthetic',
+    badge: 'Best Value',
+    badgeBg: 'bg-emerald-500 text-white',
+    featured: true,
+    visible: false,
+    title: 'Complete Aesthetic Injections Mastery Bundle',
+    subtitle: 'Core Certification + All 4 Aesthetic Masterclasses',
+    price: '$499',
+    priceInt: 49900,
+    originalPrice: '$895',
+    type: 'One-time · Save $396',
+    description: 'Everything you need to master aesthetic injections — the Core Certification plus Dermal Fillers, Botox, PRF, and PRF EZGel masterclasses.',
+    includes: [
+      'Aesthetic Injections Certification (Core)',
+      'Dermal Fillers Masterclass',
+      'Botox (Neurotoxin) Masterclass',
+      'PRF Therapy Masterclass',
+      'PRF EZGel Masterclass',
+      'All future course updates included',
+      'Priority community support',
+    ],
+  },
+  {
+    key: 'dermal-fillers',
+    category: 'aesthetic-addon',
+    lane: 'aesthetic',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
+    featured: false,
+    visible: false,
+    title: 'Dermal Fillers Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Comprehensive training on hyaluronic acid dermal filler injections — facial mapping, product selection, injection technique, and complication management.',
+    includes: [
+      'Facial mapping & proportions',
+      'HA filler product selection',
+      'Lip, cheek, and jawline techniques',
+      'Cannula vs needle approach',
+      'Vascular complications & hyaluronidase protocol',
+      'Post-treatment care',
+    ],
+  },
+  {
+    key: 'botox',
+    category: 'aesthetic-addon',
+    lane: 'aesthetic',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
+    featured: false,
+    visible: false,
+    title: 'Botox (Neurotoxin) Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Master neurotoxin administration for aesthetic and therapeutic indications — facial muscle anatomy, dosing, injection mapping, and adverse-event recognition.',
+    includes: [
+      'Facial muscle anatomy',
+      'Dosing & dilution strategies',
+      'Upper face injection mapping',
+      'Lower face & neck indications',
+      'Therapeutic uses (TMJ, migraine, hyperhidrosis)',
+      'Adverse event management',
+    ],
+  },
+  {
+    key: 'prf-therapy',
+    category: 'aesthetic-addon',
+    lane: 'aesthetic',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
+    featured: false,
+    visible: false,
+    title: 'PRF Therapy Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Platelet-Rich Fibrin (PRF) injections for skin rejuvenation and hair restoration — blood draw, centrifugation protocols, injection techniques, and patient selection.',
+    includes: [
+      'Blood draw & centrifugation protocols',
+      'PRF preparation & handling',
+      'Skin rejuvenation injection techniques',
+      'Hair restoration protocols',
+      'Patient selection & consultation',
+      'Aftercare and expected results',
+    ],
+  },
+  {
+    key: 'prf-ezgel',
+    category: 'aesthetic-addon',
+    lane: 'aesthetic',
+    badge: 'Add-on',
+    badgeBg: 'bg-[#FBF6FF] text-[#9E50E5] border border-[#9E50E5]/30',
+    featured: false,
+    visible: false,
+    title: 'PRF EZGel Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Core Course',
+    description: 'Advanced PRF EZGel injectable technique — thermal processing, volumization strategy, combination with other biostimulators, and aftercare protocols.',
+    includes: [
+      'EZGel thermal processing steps',
+      'Volumization strategy & layering',
+      'Combination with fillers and PRF',
+      'Injection depth & placement',
+      'Duration of results',
+      'Aftercare & follow-up',
+    ],
+  },
 ]
 
+// `lane` classifies courses into domains for the top-level tabs so the
+// storefront speaks to both IV and aesthetic audiences without a wall of
+// sub-filters. `category` still drives tier-level filters inside each lane.
 const FILTERS = [
   { key: 'all', label: 'All Courses' },
-  { key: 'core', label: 'Core Course' },
+  { key: 'iv', label: 'IV Therapy', laneFilter: 'iv' as const },
+  { key: 'aesthetic', label: 'Aesthetics', laneFilter: 'aesthetic' as const },
+  { key: 'core', label: 'Core Courses' },
   { key: 'addon', label: 'Masterclasses' },
-  { key: 'bundle', label: 'Bundle' },
+  { key: 'bundle', label: 'Bundles' },
 ]
 
 const FAQS = [
@@ -161,11 +312,11 @@ const FAQS = [
   },
   {
     q: 'Do I need the Core Course before the masterclasses?',
-    a: 'Yes — the Advanced Masterclasses build on foundational IV therapy knowledge. We strongly recommend completing the Core Course first, or purchase the Complete Bundle to get everything at once.',
+    a: 'Yes — the Advanced Masterclasses build on foundational knowledge taught in each domain\u2019s Core Certification. We strongly recommend completing the Core Course first, or purchase the matching Complete Bundle to get everything at once.',
   },
   {
-    q: 'What does the bundle include?',
-    a: 'The Complete IV Therapy Mastery Bundle includes the Core Course ($299) plus all four Advanced Masterclasses ($149 each) — a total value of $895, bundled at $499.',
+    q: 'What do the bundles include?',
+    a: 'Each Complete Mastery Bundle contains its domain\u2019s Core Certification ($299) plus all four Advanced Masterclasses ($149 each) — a total value of $895, bundled at $499. IV and aesthetic lanes each have their own bundle.',
   },
   {
     q: 'Are CEU credits available?',
@@ -177,11 +328,37 @@ const FAQS = [
   },
 ]
 
+// Courses default to visible so legacy IV entries without an explicit
+// `visible` field continue to render. Aesthetic entries set visible=false
+// until the user finalizes pricing and cohort dates.
+type CourseEntry = (typeof COURSES)[number] & {
+  lane?: 'iv' | 'aesthetic'
+  visible?: boolean
+}
+
+const isVisible = (c: CourseEntry) => c.visible !== false
+// Treat missing lane as IV so legacy entries keep their current behavior.
+const laneOf = (c: CourseEntry) => c.lane ?? 'iv'
+const tierOf = (c: CourseEntry) => {
+  const cat = c.category
+  if (cat === 'core' || cat === 'aesthetic-core') return 'core'
+  if (cat === 'addon' || cat === 'aesthetic-addon') return 'addon'
+  if (cat === 'bundle' || cat === 'aesthetic-bundle') return 'bundle'
+  return cat
+}
+
 export default function PricingPage() {
   const [activeFilter, setActiveFilter] = useState('all')
   const { addItem, isInCart } = useCart()
 
-  const filtered = activeFilter === 'all' ? COURSES : COURSES.filter((c) => c.category === activeFilter)
+  const visibleCourses = (COURSES as CourseEntry[]).filter(isVisible)
+
+  const filtered =
+    activeFilter === 'all'
+      ? visibleCourses
+      : activeFilter === 'iv' || activeFilter === 'aesthetic'
+        ? visibleCourses.filter((c) => laneOf(c) === activeFilter)
+        : visibleCourses.filter((c) => tierOf(c) === activeFilter)
 
   return (
     <div className="min-h-screen bg-white">
@@ -193,11 +370,11 @@ export default function PricingPage() {
           <AnimateOnScroll>
             <p className="text-xs font-semibold text-[#9E50E5] uppercase tracking-widest mb-3">Course Catalog</p>
             <h1 className="text-4xl md:text-5xl font-extrabold text-[#1a1a1a] mb-4">
-              IV Therapy Certification Courses
+              Advanced Clinical Training for Licensed Providers
             </h1>
             <p className="text-lg text-[#5B5B5B] max-w-2xl mx-auto leading-relaxed mb-8">
-              Start with the Core Course, then expand your expertise with Advanced Masterclasses.
-              Or save $396 with the Complete Bundle.
+              IV therapy and aesthetic injection certifications, plus advanced masterclasses.
+              Start with a Core Certification, expand with masterclasses, or save $396 with a Complete Bundle.
             </p>
             <div className="flex flex-wrap gap-5 justify-center">
               {[
@@ -223,7 +400,16 @@ export default function PricingPage() {
           {/* Filter tabs */}
           <div className="flex flex-wrap gap-2 mb-10 justify-center">
             {FILTERS.map((f) => {
-              const count = f.key === 'all' ? COURSES.length : COURSES.filter((c) => c.category === f.key).length
+              const count =
+                f.key === 'all'
+                  ? visibleCourses.length
+                  : f.key === 'iv' || f.key === 'aesthetic'
+                    ? visibleCourses.filter((c) => laneOf(c) === f.key).length
+                    : visibleCourses.filter((c) => tierOf(c) === f.key).length
+              // Hide a tab entirely when no courses match — prevents a lonely
+              // "Aesthetics (0)" pill from showing until the first course in
+              // the lane is published.
+              if (f.key !== 'all' && count === 0) return null
               return (
                 <button
                   key={f.key}

@@ -48,6 +48,15 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+const AESTHETIC_KEYS = new Set<string>([
+  'aesthetic-injections-certification',
+  'aesthetic-mastery-bundle',
+  'dermal-fillers',
+  'botox',
+  'prf-therapy',
+  'prf-ezgel',
+])
+
 const LICENSE_TYPES = [
   { value: 'RN', label: 'RN — Registered Nurse' },
   { value: 'NP', label: 'NP — Nurse Practitioner' },
@@ -68,7 +77,10 @@ const US_STATES = [
   'VA','WA','WV','WI','WY','DC',
 ]
 
-// Course catalog — maps to Square catalog object IDs and descriptions
+// Course catalog. `squarePlanEnv` is a legacy field from the Square-based
+// checkout path (now decommissioned — see /api/square/webhook/route.ts).
+// All active checkouts flow through /api/checkout/create which reads prices
+// from src/lib/jidopay.ts — the server-authoritative catalog.
 const COURSE_CATALOG: Record<string, {
   title: string
   subtitle: string
@@ -178,6 +190,105 @@ const COURSE_CATALOG: Record<string, {
     ],
     squarePlanEnv: 'SQUARE_IV_PUSH_PLAN_ID',
   },
+  'aesthetic-injections-certification': {
+    title: 'Aesthetic Injections Certification',
+    subtitle: 'Core Certification — Foundational Aesthetics',
+    price: '$299',
+    priceInt: 29900,
+    type: 'One-time · Lifetime access',
+    includes: [
+      'Facial anatomy for injectors',
+      'Patient assessment & consultation',
+      'Injection technique fundamentals',
+      'Product selection & comparison',
+      'Complication recognition & management',
+      'Legal considerations & scope of practice',
+      'Documentation & consent forms',
+      'Certificate of completion',
+    ],
+    squarePlanEnv: '',
+  },
+  'aesthetic-mastery-bundle': {
+    title: 'Complete Aesthetic Injections Mastery Bundle',
+    subtitle: 'Core Course + All 4 Aesthetic Masterclasses',
+    price: '$499',
+    priceInt: 49900,
+    type: 'One-time · Save $396',
+    includes: [
+      'Aesthetic Injections Certification (Core)',
+      'Dermal Fillers Masterclass',
+      'Botox (Neurotoxin) Masterclass',
+      'PRF Therapy Masterclass',
+      'PRF EZGel Masterclass',
+      'All future course updates included',
+      'Priority community support',
+    ],
+    squarePlanEnv: '',
+  },
+  'dermal-fillers': {
+    title: 'Dermal Fillers Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Aesthetic Core',
+    includes: [
+      'HA filler product selection & rheology',
+      'Lip injection technique',
+      'Cheek & midface volumization',
+      'Jawline contouring',
+      'Needle vs cannula decision-making',
+      'Vascular occlusion & hyaluronidase protocol',
+    ],
+    squarePlanEnv: '',
+  },
+  'botox': {
+    title: 'Botox (Neurotoxin) Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Aesthetic Core',
+    includes: [
+      'Neurotoxin pharmacology & brand comparison',
+      'Dosing strategy by region',
+      "Glabella, forehead & crow's feet patterns",
+      'Masseter & lower-face applications',
+      'Lip flip & advanced technique',
+      'Troubleshooting asymmetry & touch-ups',
+    ],
+    squarePlanEnv: '',
+  },
+  'prf-therapy': {
+    title: 'PRF Therapy Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Aesthetic Core',
+    includes: [
+      'PRF science & clinical evidence',
+      'Blood draw & spin protocols',
+      'Facial rejuvenation injection technique',
+      'Undereye, forehead & cheek applications',
+      'Combination with microneedling',
+      'Patient expectations & result timelines',
+    ],
+    squarePlanEnv: '',
+  },
+  'prf-ezgel': {
+    title: 'PRF EZGel Masterclass',
+    subtitle: 'Advanced Masterclass',
+    price: '$149',
+    priceInt: 14900,
+    type: 'One-time · Requires Aesthetic Core',
+    includes: [
+      'EZGel preparation protocol',
+      'Thermal activation & timing',
+      'Volumizing applications by region',
+      'Injection depth & technique',
+      'Combination with traditional PRF',
+      'Result longevity & retreatment timing',
+    ],
+    squarePlanEnv: '',
+  },
 }
 
 function CheckoutForm() {
@@ -224,21 +335,29 @@ function CheckoutForm() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load upcoming cohorts. Admin bulk-creates cohorts for every course on
-  // the same date/time, so we always fetch the canonical iv-therapy-cert
-  // series to get the candidate dates — the webhook resolves each purchased
-  // course's own cohort row by matching meeting_at.
+  // the same date/time, so we fetch a canonical per-lane slug to get the
+  // candidate dates — the webhook resolves each purchased course's own
+  // cohort row by matching meeting_at.
+  //
+  // Lane resolution rules:
+  //  - Aesthetic bundle / course → aesthetic-injections-certification
+  //  - Anything else (IV lane or mixed cart) → iv-therapy-certification
   useEffect(() => {
     async function loadCohorts() {
-      const slug = cartMode
-        ? 'iv-therapy-certification'
+      const keysForLane = cartMode
+        ? cartItems.map((i) => i.key)
         : courseKey
-      if (!slug) {
+          ? [courseKey]
+          : []
+      if (keysForLane.length === 0) {
         setCohorts([])
         setCohortsLoading(false)
         return
       }
-      const cohortSlug =
-        slug === 'complete-mastery-bundle' ? 'iv-therapy-certification' : slug
+      const allAesthetic = keysForLane.every((k) => AESTHETIC_KEYS.has(k))
+      const cohortSlug = allAesthetic
+        ? 'aesthetic-injections-certification'
+        : 'iv-therapy-certification'
       setCohortsLoading(true)
       try {
         const res = await fetch(

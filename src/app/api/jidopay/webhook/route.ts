@@ -7,6 +7,7 @@ import {
   purchaseConfirmationText,
 } from '@/lib/emails/purchase-confirmation'
 import {
+  BUNDLE_EXPANSION,
   COURSE_PRICES,
   COURSE_TITLES,
   linkIdToCourseKey,
@@ -107,6 +108,12 @@ export async function POST(request: Request) {
             'vitamin-nutrient-therapy',
             'nad-plus-masterclass',
             'iv-push-administration',
+            'aesthetic-injections-certification',
+            'aesthetic-mastery-bundle',
+            'dermal-fillers',
+            'botox',
+            'prf-therapy',
+            'prf-ezgel',
           ].includes(s)
         )
     : []
@@ -349,11 +356,12 @@ async function grantCourseAccess({
     amount_paid: amountPaid,
   }
 
-  if (courseKey === 'complete-mastery-bundle') {
+  if (courseKey in BUNDLE_EXPANSION) {
+    const courseTypes = BUNDLE_EXPANSION[courseKey as keyof typeof BUNDLE_EXPANSION]
     const { data: courses } = await supabase
       .from('courses')
       .select('id, slug')
-      .in('course_type', ['core', 'addon'])
+      .in('course_type', courseTypes)
 
     if (!courses || courses.length === 0) return []
 
@@ -367,9 +375,9 @@ async function grantCourseAccess({
         { onConflict: 'user_id,course_id' }
       )
     }
-    // Return the bundle key so the confirmation email reads "Complete IV
-    // Therapy Mastery Bundle" instead of six individual courses.
-    return ['complete-mastery-bundle']
+    // Return the bundle key so the confirmation email reads the bundle's
+    // marketing title instead of every individual course.
+    return [courseKey]
   }
 
   const { data: course } = await supabase
@@ -429,11 +437,12 @@ async function grantManyCourses({
 
   const granted: SvaCourseKey[] = []
   for (const key of courseKeys) {
-    if (key === 'complete-mastery-bundle') {
+    if (key in BUNDLE_EXPANSION) {
+      const courseTypes = BUNDLE_EXPANSION[key as keyof typeof BUNDLE_EXPANSION]
       const { data: courses } = await supabase
         .from('courses')
         .select('id, slug')
-        .in('course_type', ['core', 'addon'])
+        .in('course_type', courseTypes)
       for (const course of courses ?? []) {
         await supabase.from('course_purchases').upsert(
           {
@@ -448,7 +457,7 @@ async function grantManyCourses({
           { onConflict: 'user_id,course_id' }
         )
       }
-      granted.push('complete-mastery-bundle')
+      granted.push(key)
       continue
     }
 
