@@ -171,7 +171,7 @@ export default function CartPage() {
                   </div>
                   <div className="flex items-center justify-center gap-1.5 text-xs text-[#5B5B5B]">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                    Instant access after payment
+                    Enrollment confirmed instantly
                   </div>
                 </div>
 

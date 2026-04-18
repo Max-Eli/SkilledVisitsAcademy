@@ -800,7 +800,7 @@ function CheckoutForm() {
                           Flexible scheduling
                         </p>
                         <p className="mt-1 text-xs text-[#5B5B5B]">
-                          After payment you&apos;ll receive a confirmation email and our clinical team will reach out directly to set the date. Course materials unlock right away so you can prep.
+                          After payment you&apos;ll receive a confirmation email and our clinical team will reach out directly to set the date. Course materials unlock 48 hours before your scheduled session so you can prep.
                         </p>
                       </div>
                     </>

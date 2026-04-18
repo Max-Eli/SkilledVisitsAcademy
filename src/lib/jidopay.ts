@@ -87,8 +87,9 @@ export function isPrivateKey(key: string): boolean {
   return key in PRIVATE_TO_STANDARD
 }
 
-// In-person SKUs don't use the 48h-before-Zoom access unlock model — they
-// grant immediate access to pre-reading materials and a scheduled event.
+// In-person SKUs are manually scheduled by admin after purchase. Like private
+// 1:1 SKUs, their course materials unlock 48 hours before the confirmed
+// session date.
 export const IN_PERSON_KEYS: readonly SvaCourseKey[] = [
   'bbl-russian-lip-inperson',
   'private-bbl-russian-lip',
