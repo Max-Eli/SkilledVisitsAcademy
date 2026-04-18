@@ -8,9 +8,9 @@ import { PublicFooter } from '@/components/layout/PublicFooter'
 import { AnimateOnScroll } from '@/components/ui/animate-on-scroll'
 
 const SUGGESTED_COURSES = [
-  { key: 'iv-therapy-certification', title: 'IV Therapy Certification', price: '$299', subtitle: 'Core Certification' },
-  { key: 'complete-mastery-bundle', title: 'Complete Mastery Bundle', price: '$499', subtitle: 'Best Value — Save $396' },
-  { key: 'nad-plus-masterclass', title: 'NAD+ Therapy Masterclass', price: '$149', subtitle: 'Advanced Masterclass' },
+  { key: 'iv-therapy-training', title: 'Comprehensive IV Therapy Training', price: '$399', subtitle: 'Live 4-hour Zoom cohort' },
+  { key: 'aesthetic-injector-bundle', title: 'Complete Aesthetic Injector Bundle', price: '$1,000', subtitle: 'Best Value — Save $796' },
+  { key: 'botox-basic', title: 'Basic Botox Training', price: '$399', subtitle: 'Live 4-hour Zoom cohort' },
 ]
 
 export default function CartPage() {
@@ -77,10 +77,10 @@ export default function CartPage() {
                       <div className="flex items-center gap-3 mt-2">
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
                           <CheckCircle className="h-3 w-3" />
-                          Lifetime access
+                          Live instructor-led
                         </span>
                         <span className="text-[#D9D9D9]">·</span>
-                        <span className="text-xs text-[#5B5B5B]">Instant access after payment</span>
+                        <span className="text-xs text-[#5B5B5B]">Completion certificate</span>
                       </div>
                     </div>
 

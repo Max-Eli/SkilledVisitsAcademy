@@ -13,7 +13,12 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/lib/cart'
-import { grossUpCents, type SvaCourseKey } from '@/lib/jidopay'
+import {
+  grossUpCents,
+  isInPersonKey,
+  isPrivateKey,
+  type SvaCourseKey,
+} from '@/lib/jidopay'
 
 // window.JidoPay is injected by the embed script loaded from jidopay.com.
 // openCheckout accepts a dynamic buy.stripe.com url that the server just
@@ -48,14 +53,25 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+// IV lane defaults to the flagship course's cohort list; aesthetic cart
+// items route to the basic Botox cohort list. Admin bulk-creates cohorts
+// across every course on the same date, so the picked meeting_at is used
+// by the webhook to find each course's own cohort row.
 const AESTHETIC_KEYS = new Set<string>([
-  'aesthetic-injections-certification',
-  'aesthetic-mastery-bundle',
-  'dermal-fillers',
-  'botox',
-  'prf-therapy',
-  'prf-ezgel',
+  'botox-basic',
+  'botox-advanced',
+  'filler-basic',
+  'filler-advanced',
+  'aesthetic-injector-bundle',
+  'prp-prf-ezgel',
 ])
+
+// Courses that require admin to schedule the session manually: in-person
+// hands-on events and private 1:1 sessions. These skip the cohort picker
+// on checkout and go straight into the admin queue after payment.
+function isManuallyScheduled(key: string): boolean {
+  return isInPersonKey(key) || isPrivateKey(key)
+}
 
 const LICENSE_TYPES = [
   { value: 'RN', label: 'RN — Registered Nurse' },
@@ -77,10 +93,10 @@ const US_STATES = [
   'VA','WA','WV','WI','WY','DC',
 ]
 
-// Course catalog. `squarePlanEnv` is a legacy field from the Square-based
-// checkout path (now decommissioned — see /api/square/webhook/route.ts).
-// All active checkouts flow through /api/checkout/create which reads prices
-// from src/lib/jidopay.ts — the server-authoritative catalog.
+// Course catalog — keep in sync with src/lib/jidopay.ts (server-authoritative)
+// and the /pricing and /course/[slug] pages. The display values here only
+// render the order summary; the actual amount charged always comes from
+// COURSE_PRICES_CENTS in jidopay.ts.
 const COURSE_CATALOG: Record<string, {
   title: string
   subtitle: string
@@ -88,214 +104,305 @@ const COURSE_CATALOG: Record<string, {
   priceInt: number
   type: string
   includes: string[]
-  squarePlanEnv: string
 }> = {
-  'iv-therapy-certification': {
-    title: 'IV Therapy Certification',
-    subtitle: 'Core Certification — 12 Modules',
-    price: '$299',
-    priceInt: 29900,
-    type: 'One-time · Lifetime access',
+
+  // ─── IV lane — online live Zoom ───
+  'iv-therapy-training': {
+    title: 'Comprehensive IV Therapy Training',
+    subtitle: 'Live 4-hour Zoom cohort',
+    price: '$399',
+    priceInt: 39900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'IV therapy fundamentals',
-      'Anatomy & physiology of veins',
-      'Patient assessment & screening',
-      'IV equipment, supplies & insertion techniques',
-      'Hydration therapy protocols',
-      'Infection control & safety standards',
-      'Legal considerations & scope of practice',
-      'Documentation & consent forms',
-      'Certificate of completion',
+      'Live 4-hour instructor-led Zoom',
+      'Pre-session reading and equipment list',
+      'Step-by-step insertion technique demo',
+      'Hydration and nutrient protocol library',
+      'Complication management workflow',
+      'Documentation and consent templates',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: 'SQUARE_IV_CERTIFICATION_PLAN_ID',
-  },
-  'complete-mastery-bundle': {
-    title: 'Complete IV Therapy Mastery Bundle',
-    subtitle: 'Core Course + All 4 Masterclasses',
-    price: '$499',
-    priceInt: 49900,
-    type: 'One-time · Save $396',
-    includes: [
-      'IV Therapy Certification (Core)',
-      'Advanced IV Complications & Emergency Mgmt',
-      'Vitamin & Nutrient Therapy Masterclass',
-      'NAD+ Therapy Masterclass',
-      'IV Push Administration Masterclass',
-      'All future course updates included',
-      'Priority community support',
-    ],
-    squarePlanEnv: 'SQUARE_BUNDLE_PLAN_ID',
   },
   'iv-complications-emergency': {
-    title: 'Advanced IV Complications & Emergency Management',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Core Course',
+    title: 'IV Complications & Emergency Management',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$199',
+    priceInt: 19900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Identifying IV complications',
-      'Infiltration & extravasation management',
-      'Phlebitis prevention & treatment',
-      'Allergic reactions & anaphylaxis protocols',
-      'Air embolism awareness',
-      'Emergency management & documentation',
+      'Live 4-hour instructor-led Zoom',
+      'Infiltration and extravasation grading',
+      'Anaphylaxis protocol and epinephrine dosing',
+      'Air embolism and fluid overload response',
+      'Emergency documentation templates',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: 'SQUARE_COMPLICATIONS_PLAN_ID',
   },
   'vitamin-nutrient-therapy': {
     title: 'Vitamin & Nutrient Therapy Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Core Course',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$199',
+    priceInt: 19900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Vitamin pharmacology fundamentals',
-      'Vitamin C & B complex protocols',
-      'Magnesium, zinc & trace elements',
-      'Glutathione therapy',
-      'Amino acids & nutrient combinations',
-      'Mixing compatibility & dosing strategies',
+      'Live 4-hour instructor-led Zoom',
+      'High-dose vitamin C protocols',
+      'B-complex and Myers Cocktail',
+      'Glutathione, amino acids and combinations',
+      'Mixing compatibility chart',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: 'SQUARE_VITAMIN_PLAN_ID',
   },
   'nad-plus-masterclass': {
     title: 'NAD+ Therapy Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Core Course',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$199',
+    priceInt: 19900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Science behind NAD+ therapy',
-      'Anti-aging & cellular repair benefits',
-      'Infusion protocols & dosing',
-      'Infusion rates & monitoring',
-      'Managing common side effects',
-      'Patient selection & contraindications',
+      'Live 4-hour instructor-led Zoom',
+      'Standard and high-dose infusion protocols',
+      'Rate titration and flush management',
+      'Anti-aging and recovery applications',
+      'Patient selection framework',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: 'SQUARE_NAD_PLAN_ID',
   },
   'iv-push-administration': {
     title: 'IV Push Administration Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Core Course',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$199',
+    priceInt: 19900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'IV push vs infusion techniques',
-      'Step-by-step IV push administration',
-      'Safe medication administration rates',
-      'Glutathione IV push protocols',
-      'Vitamin push techniques',
-      'Safety considerations & monitoring',
+      'Live 4-hour instructor-led Zoom',
+      'IV push vs infusion clinical distinctions',
+      'Safe administration rates by medication',
+      'Glutathione, vitamin C and B-complex push protocols',
+      'Monitoring and adverse-event response',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: 'SQUARE_IV_PUSH_PLAN_ID',
   },
-  'aesthetic-injections-certification': {
-    title: 'Aesthetic Injections Certification',
-    subtitle: 'Core Certification — Foundational Aesthetics',
-    price: '$299',
-    priceInt: 29900,
-    type: 'One-time · Lifetime access',
+
+  // ─── Aesthetic lane — online live Zoom ───
+  'botox-basic': {
+    title: 'Basic Botox Training',
+    subtitle: 'Live 4-hour Zoom cohort',
+    price: '$399',
+    priceInt: 39900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Facial anatomy for injectors',
-      'Patient assessment & consultation',
-      'Injection technique fundamentals',
-      'Product selection & comparison',
-      'Complication recognition & management',
-      'Legal considerations & scope of practice',
-      'Documentation & consent forms',
-      'Certificate of completion',
+      'Live 4-hour instructor-led Zoom',
+      'Neurotoxin pharmacology and reconstitution',
+      'Upper-face injection patterns',
+      'Consultation and treatment planning',
+      'Asymmetry troubleshooting',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: '',
   },
-  'aesthetic-mastery-bundle': {
-    title: 'Complete Aesthetic Injections Mastery Bundle',
-    subtitle: 'Core Course + All 4 Aesthetic Masterclasses',
+  'botox-advanced': {
+    title: 'Advanced Botox Training',
+    subtitle: 'Live 4-hour Zoom masterclass',
     price: '$499',
     priceInt: 49900,
-    type: 'One-time · Save $396',
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Aesthetic Injections Certification (Core)',
-      'Dermal Fillers Masterclass',
-      'Botox (Neurotoxin) Masterclass',
-      'PRF Therapy Masterclass',
-      'PRF EZGel Masterclass',
-      'All future course updates included',
-      'Priority community support',
+      'Live 4-hour instructor-led Zoom',
+      'Masseter reduction and facial slimming',
+      'Lip flip, DAOs and mentalis',
+      'Nefertiti lift and platysmal banding',
+      'Difficult-case troubleshooting',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: '',
   },
-  'dermal-fillers': {
-    title: 'Dermal Fillers Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Aesthetic Core',
+  'filler-basic': {
+    title: 'Basic Dermal Filler Training',
+    subtitle: 'Live 4-hour Zoom cohort',
+    price: '$399',
+    priceInt: 39900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'HA filler product selection & rheology',
+      'Live 4-hour instructor-led Zoom',
+      'HA filler rheology and product selection',
       'Lip injection technique',
-      'Cheek & midface volumization',
-      'Jawline contouring',
-      'Needle vs cannula decision-making',
-      'Vascular occlusion & hyaluronidase protocol',
+      'Midface and cheek volumization',
+      'Vascular occlusion and hyaluronidase protocol',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: '',
   },
-  'botox': {
-    title: 'Botox (Neurotoxin) Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Aesthetic Core',
+  'filler-advanced': {
+    title: 'Advanced Dermal Filler Training',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$499',
+    priceInt: 49900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'Neurotoxin pharmacology & brand comparison',
-      'Dosing strategy by region',
-      "Glabella, forehead & crow's feet patterns",
-      'Masseter & lower-face applications',
-      'Lip flip & advanced technique',
-      'Troubleshooting asymmetry & touch-ups',
+      'Live 4-hour instructor-led Zoom',
+      'Full-face treatment design',
+      'Jawline and chin contouring',
+      'Non-surgical rhinoplasty technique',
+      'Tear trough with cannula',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: '',
   },
-  'prf-therapy': {
-    title: 'PRF Therapy Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Aesthetic Core',
+  'aesthetic-injector-bundle': {
+    title: 'Complete Aesthetic Injector Bundle',
+    subtitle: 'Basic + Advanced Botox + Basic + Advanced Filler',
+    price: '$1,000',
+    priceInt: 100000,
+    type: 'Bundle · Save $796 · 4 certificates',
     includes: [
-      'PRF science & clinical evidence',
-      'Blood draw & spin protocols',
-      'Facial rejuvenation injection technique',
-      'Undereye, forehead & cheek applications',
-      'Combination with microneedling',
-      'Patient expectations & result timelines',
+      'Basic Botox Training (4-hour live)',
+      'Advanced Botox Training (4-hour live)',
+      'Basic Dermal Filler Training (4-hour live)',
+      'Advanced Dermal Filler Training (4-hour live)',
+      'All slide decks, protocols and templates',
+      'Four SVA completion certificates',
+      'Priority alumni Q&A support',
     ],
-    squarePlanEnv: '',
   },
-  'prf-ezgel': {
-    title: 'PRF EZGel Masterclass',
-    subtitle: 'Advanced Masterclass',
-    price: '$149',
-    priceInt: 14900,
-    type: 'One-time · Requires Aesthetic Core',
+  'prp-prf-ezgel': {
+    title: 'PRP, PRF & EZ Gel Training',
+    subtitle: 'Live 4-hour Zoom masterclass',
+    price: '$499',
+    priceInt: 49900,
+    type: 'Live Zoom · 4 hours · Certificate',
     includes: [
-      'EZGel preparation protocol',
-      'Thermal activation & timing',
-      'Volumizing applications by region',
-      'Injection depth & technique',
-      'Combination with traditional PRF',
-      'Result longevity & retreatment timing',
+      'Live 4-hour instructor-led Zoom',
+      'PRP, PRF and EZ Gel clinical differences',
+      'Blood draw and centrifuge protocols',
+      'EZ Gel thermal activation',
+      'Facial injection technique by region',
+      'SVA completion certificate',
     ],
-    squarePlanEnv: '',
+  },
+
+  // ─── In-person hands-on ───
+  'bbl-russian-lip-inperson': {
+    title: 'Non-Surgical BBL & Russian Lip Technique',
+    subtitle: 'In-person hands-on intensive',
+    price: '$2,500',
+    priceInt: 250000,
+    type: 'In-person · 1-day · Live models',
+    includes: [
+      'Full-day in-person hands-on workshop',
+      'Live model practice — BBL and Russian lip',
+      'Pre-reading and protocols',
+      'All product and supplies for the day',
+      'Professional portfolio photos',
+      'Lunch and refreshments provided',
+      'SVA completion certificate',
+    ],
+  },
+
+  // ─── Private 1:1 ───
+  'private-iv-therapy-training': {
+    title: 'Private Comprehensive IV Therapy Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$798',
+    priceInt: 79800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Tailored emphasis and case discussion',
+      'SVA completion certificate',
+    ],
+  },
+  'private-botox-basic': {
+    title: 'Private Basic Botox Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$798',
+    priceInt: 79800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Tailored emphasis and case discussion',
+      'SVA completion certificate',
+    ],
+  },
+  'private-botox-advanced': {
+    title: 'Private Advanced Botox Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$998',
+    priceInt: 99800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Bring-your-own case review',
+      'SVA completion certificate',
+    ],
+  },
+  'private-filler-basic': {
+    title: 'Private Basic Dermal Filler Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$798',
+    priceInt: 79800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Tailored emphasis and case discussion',
+      'SVA completion certificate',
+    ],
+  },
+  'private-filler-advanced': {
+    title: 'Private Advanced Dermal Filler Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$998',
+    priceInt: 99800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Bring-your-own case review',
+      'SVA completion certificate',
+    ],
+  },
+  'private-prp-prf-ezgel': {
+    title: 'Private PRP, PRF & EZ Gel Training',
+    subtitle: 'Dedicated 1:1 session',
+    price: '$998',
+    priceInt: 99800,
+    type: 'Private 1:1 · Scheduled with you',
+    includes: [
+      '1:1 dedicated 4-hour live session',
+      'Flexible scheduling around your calendar',
+      'All materials from the standard course',
+      'Equipment recommendations tailored to you',
+      'SVA completion certificate',
+    ],
+  },
+  'private-bbl-russian-lip': {
+    title: 'Private Non-Surgical BBL & Russian Lip Technique',
+    subtitle: 'Dedicated 1:1 in-person intensive',
+    price: '$5,000',
+    priceInt: 500000,
+    type: 'Private 1:1 · In-person hands-on',
+    includes: [
+      'Dedicated 1:1 in-person hands-on day',
+      'Live models sourced for your session',
+      'Pre-reading and protocols',
+      'All product and supplies',
+      'Professional portfolio photos',
+      'One free follow-up 1:1 Zoom consult',
+      'SVA completion certificate',
+    ],
   },
 }
 
 function CheckoutForm() {
   const searchParams = useSearchParams()
   const cartMode = searchParams.get('from') === 'cart'
-  const courseKey = !cartMode ? (searchParams.get('course') ?? 'iv-therapy-certification') : null
-  const course = courseKey ? (COURSE_CATALOG[courseKey] ?? COURSE_CATALOG['iv-therapy-certification']) : null
+  const courseKey = !cartMode ? (searchParams.get('course') ?? 'iv-therapy-training') : null
+  const course = courseKey ? (COURSE_CATALOG[courseKey] ?? COURSE_CATALOG['iv-therapy-training']) : null
 
   const { items: cartItems, clearCart } = useCart()
   const checkoutItems = cartMode ? cartItems : course ? [{ key: courseKey!, ...course }] : []
@@ -325,6 +432,18 @@ function CheckoutForm() {
   const [cohortsLoading, setCohortsLoading] = useState(true)
   const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null)
 
+  // Determine the scheduling mode for the current cart. Live-Zoom items need
+  // a cohort picker; manually-scheduled items (in-person / private 1:1)
+  // skip the picker because admin schedules with the learner after payment.
+  const keysForCart: string[] = cartMode
+    ? cartItems.map((i) => i.key)
+    : courseKey
+      ? [courseKey]
+      : []
+  const anyManual = keysForCart.some(isManuallyScheduled)
+  const allManual = keysForCart.length > 0 && keysForCart.every(isManuallyScheduled)
+  const mixedScheduling = anyManual && !allManual
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
@@ -334,30 +453,26 @@ function CheckoutForm() {
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load upcoming cohorts. Admin bulk-creates cohorts for every course on
-  // the same date/time, so we fetch a canonical per-lane slug to get the
-  // candidate dates — the webhook resolves each purchased course's own
-  // cohort row by matching meeting_at.
+  // Load upcoming cohorts for live-Zoom carts. Admin bulk-creates cohorts
+  // for every course on the same date/time so we fetch a canonical per-lane
+  // slug to get the candidate dates — the webhook then resolves each
+  // purchased course's own cohort row by matching meeting_at.
   //
-  // Lane resolution rules:
-  //  - Aesthetic bundle / course → aesthetic-injections-certification
-  //  - Anything else (IV lane or mixed cart) → iv-therapy-certification
+  // Lane resolution:
+  //  - All aesthetic → botox-basic cohort list
+  //  - Anything else (IV, bundle, mixed IV+aesthetic) → iv-therapy-training
+  //  - All manually-scheduled (in-person / private) → skip entirely
   useEffect(() => {
     async function loadCohorts() {
-      const keysForLane = cartMode
-        ? cartItems.map((i) => i.key)
-        : courseKey
-          ? [courseKey]
-          : []
-      if (keysForLane.length === 0) {
+      if (keysForCart.length === 0 || allManual) {
         setCohorts([])
         setCohortsLoading(false)
+        setSelectedCohortId(null)
         return
       }
-      const allAesthetic = keysForLane.every((k) => AESTHETIC_KEYS.has(k))
-      const cohortSlug = allAesthetic
-        ? 'aesthetic-injections-certification'
-        : 'iv-therapy-certification'
+      const liveZoomKeys = keysForCart.filter((k) => !isManuallyScheduled(k))
+      const allAesthetic = liveZoomKeys.every((k) => AESTHETIC_KEYS.has(k))
+      const cohortSlug = allAesthetic ? 'botox-basic' : 'iv-therapy-training'
       setCohortsLoading(true)
       try {
         const res = await fetch(
@@ -377,7 +492,7 @@ function CheckoutForm() {
       }
     }
     loadCohorts()
-  }, [courseKey, cartMode, cartItems])
+  }, [courseKey, cartMode, cartItems, allManual]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault()
@@ -415,7 +530,14 @@ function CheckoutForm() {
       return
     }
 
-    if (!selectedCohortId) {
+    if (mixedScheduling) {
+      toast.error(
+        'In-person and private 1:1 courses must be purchased separately from live-Zoom courses.'
+      )
+      return
+    }
+
+    if (!allManual && !selectedCohortId) {
       toast.error('Please pick a cohort date before continuing.')
       return
     }
@@ -469,7 +591,9 @@ function CheckoutForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           courseKeys: targetCourseKeys,
-          cohortId: selectedCohortId,
+          // cohortId omitted for manually-scheduled carts — admin schedules
+          // each session directly with the learner after payment.
+          cohortId: allManual ? null : selectedCohortId,
         }),
       })
       const createJson = await createRes.json().catch(() => ({}))
@@ -652,20 +776,50 @@ function CheckoutForm() {
                   </>
                 )}
 
-                {/* Cohort picker */}
+                {/* Scheduling: cohort picker for live-Zoom, "admin schedules"
+                    notice for in-person and private 1:1 purchases. */}
                 <div className={!isLoggedIn ? 'border-t border-[#D9D9D9] pt-5' : ''}>
-                  <p className="text-xs font-semibold text-[#5B5B5B] uppercase tracking-wider mb-1">
-                    Choose your live session
-                  </p>
-                  <p className="text-xs text-[#5B5B5B] mb-4">
-                    Pick a virtual meeting date. Course materials unlock 48 hours before your session so you can prep.
-                  </p>
-                  <CohortPicker
-                    cohorts={cohorts}
-                    loading={cohortsLoading}
-                    selectedId={selectedCohortId}
-                    onSelect={setSelectedCohortId}
-                  />
+                  {mixedScheduling ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-semibold">Please check out separately</p>
+                      <p className="mt-1 text-xs">
+                        In-person and Private 1:1 courses must be purchased separately from standard live-Zoom courses so we can schedule each correctly.
+                      </p>
+                    </div>
+                  ) : allManual ? (
+                    <>
+                      <p className="text-xs font-semibold text-[#5B5B5B] uppercase tracking-wider mb-1">
+                        Scheduling
+                      </p>
+                      <p className="text-xs text-[#5B5B5B] mb-4">
+                        Our team will contact you within 1 business day to schedule your session at a time that works for you.
+                      </p>
+                      <div className="rounded-xl border border-[#9E50E5]/30 bg-[#FBF6FF] p-4 text-sm text-[#1a1a1a]">
+                        <p className="font-semibold flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-[#9E50E5]" />
+                          Flexible scheduling
+                        </p>
+                        <p className="mt-1 text-xs text-[#5B5B5B]">
+                          After payment you&apos;ll receive a confirmation email and our clinical team will reach out directly to set the date. Course materials unlock right away so you can prep.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-semibold text-[#5B5B5B] uppercase tracking-wider mb-1">
+                        Choose your live session
+                      </p>
+                      <p className="text-xs text-[#5B5B5B] mb-4">
+                        Pick a virtual meeting date. Course materials unlock 48 hours before your session so you can prep.
+                      </p>
+                      <CohortPicker
+                        cohorts={cohorts}
+                        loading={cohortsLoading}
+                        selectedId={selectedCohortId}
+                        onSelect={setSelectedCohortId}
+                      />
+                    </>
+                  )}
                 </div>
 
                 {/* Submit */}
@@ -694,7 +848,9 @@ function CheckoutForm() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-[#5B5B5B]">
                       <Clock className="h-3.5 w-3.5 text-emerald-500" />
-                      Access unlocks 48h before your session
+                      {allManual
+                        ? 'Admin will schedule with you after payment'
+                        : 'Access unlocks 48h before your session'}
                     </div>
                   </div>
                 </div>
@@ -753,8 +909,10 @@ function CheckoutForm() {
                     <span className="text-sm font-semibold text-[#1a1a1a]">{formatCents(feeCents)}</span>
                   </div>
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-sm text-[#5B5B5B]">Access</span>
-                    <span className="text-sm font-semibold text-emerald-600">Lifetime</span>
+                    <span className="text-sm text-[#5B5B5B]">Format</span>
+                    <span className="text-sm font-semibold text-emerald-600">
+                      {allManual ? 'Scheduled with you' : 'Live instructor-led'}
+                    </span>
                   </div>
                   <div className="border-t border-[#D9D9D9] mt-3 pt-3 flex items-center justify-between">
                     <span className="text-base font-bold text-[#1a1a1a]">Total today</span>

@@ -10,6 +10,10 @@ import {
   BUNDLE_EXPANSION,
   COURSE_PRICES,
   COURSE_TITLES,
+  PRIVATE_TO_STANDARD,
+  isInPersonKey,
+  isPrivateKey,
+  isValidCourseKey,
   linkIdToCourseKey,
   verifyJidopaySignature,
   type SvaCourseKey,
@@ -20,15 +24,16 @@ import {
 // Flow when a student pays:
 //   1. JidoPay fires "checkout.session.completed" with HMAC-signed body.
 //   2. We verify the signature against JIDOPAY_WEBHOOK_SECRET.
-//   3. We map paymentLinkId → course key, look up the Supabase user by the
-//      email Stripe collected at checkout, and upsert into course_purchases.
-//   4. We send a confirmation email via Resend.
+//   3. We resolve each metadata-stamped course key → one or more course
+//      rows (bundles expand; private SKUs map to their standard course +
+//      mark the purchase as private; everything else is 1-to-1).
+//   4. We look up the Supabase user by clientReferenceId or email, then
+//      upsert into course_purchases.
+//   5. We flip profiles.role → 'subscriber' and send the confirmation email.
 //
-// The student's identity is established by email — the SVA checkout page
-// prefills the embed with the same email they used to create their Supabase
-// account, so by the time this webhook fires, both systems agree on who
-// they are. As a belt-and-braces fallback we also honor clientReferenceId
-// (Supabase user id) if it's present on the session.
+// The student's identity is established by Supabase user id (preferred) or
+// email (fallback). The checkout page stamps both on the session so both
+// paths work.
 
 export const runtime = 'nodejs'
 
@@ -84,7 +89,6 @@ export async function POST(request: Request) {
   //  1. Dynamic-checkout path (preferred): metadata.sva_courses carries the
   //     comma-joined list of SVA course keys the student purchased, and
   //     metadata.sva_cohort_meeting_at pins the live session they chose.
-  //     The new /api/checkout/create route stamps these on every session.
   //  2. Legacy paymentLinkId path: pre-created payment links in the Jibul
   //     dashboard, resolved via NEXT_PUBLIC_JIDOPAY_LINK_* env vars and the
   //     checkout_intents row the old checkout page writes.
@@ -100,22 +104,7 @@ export async function POST(request: Request) {
     ? metaCourses
         .split(',')
         .map((s) => s.trim())
-        .filter((s): s is SvaCourseKey =>
-          [
-            'iv-therapy-certification',
-            'complete-mastery-bundle',
-            'iv-complications-emergency',
-            'vitamin-nutrient-therapy',
-            'nad-plus-masterclass',
-            'iv-push-administration',
-            'aesthetic-injections-certification',
-            'aesthetic-mastery-bundle',
-            'dermal-fillers',
-            'botox',
-            'prf-therapy',
-            'prf-ezgel',
-          ].includes(s)
-        )
+        .filter(isValidCourseKey)
     : []
 
   const legacyCourseKey = courseKeysFromMeta.length === 0
@@ -159,9 +148,8 @@ export async function POST(request: Request) {
 
   if (!userId && customerEmail) {
     // Look the user up directly via the `profiles.email` column, which is
-    // mirrored from auth.users by a Supabase trigger. The earlier approach
-    // (auth.admin.listUsers with perPage: 200) silently failed for user #201+
-    // as the learner base grew — profiles lookup scales to any size.
+    // mirrored from auth.users by a Supabase trigger. This scales past the
+    // 200-user page size of auth.admin.listUsers.
     const { data: profileMatch } = await supabase
       .from('profiles')
       .select('id, email')
@@ -179,7 +167,7 @@ export async function POST(request: Request) {
       customerEmail,
       data.clientReferenceId
     )
-    // Return 200 so the delivery is recorded as "delivered" and not retried —
+    // 200 so the delivery is recorded as "delivered" and not retried —
     // this is an auth-state issue that retries won't resolve.
     return NextResponse.json({ error: 'User not found' }, { status: 200 })
   }
@@ -188,18 +176,32 @@ export async function POST(request: Request) {
   const paymentId = data.sessionId ?? event.id ?? 'jidopay-unknown'
 
   // Resolve the meeting time + shared "access unlocks 48h before" timestamp.
-  // Two sources depending on the path above:
-  //  - Metadata path: sva_cohort_meeting_at is an authoritative ISO string
-  //    stamped by the server at checkout-create time.
-  //  - Legacy path: fall back to the most-recent checkout_intent row for
-  //    this user + course.
+  // Three modes:
+  //  - Standard live-Zoom (metaMeetingAt present): unlock 48h before
+  //  - In-person (metaMeetingAt present, all in-person): unlock now
+  //  - Manual-schedule with no metaMeetingAt (in-person OR private 1:1 with
+  //    no pre-selected date): unlock now so learners can start pre-reading
+  //    while admin schedules the live portion
+  const allInPerson =
+    courseKeysFromMeta.length > 0 &&
+    courseKeysFromMeta.every((k) => isInPersonKey(k))
+  const allManualSchedule =
+    courseKeysFromMeta.length > 0 &&
+    courseKeysFromMeta.every((k) => isInPersonKey(k) || isPrivateKey(k))
   let meetingAt: string | null = metaMeetingAt
   let meetingLink: string | null = null
-  let accessUnlocksAt: string | null = metaMeetingAt
-    ? new Date(
-        new Date(metaMeetingAt).getTime() - 48 * 60 * 60 * 1000
-      ).toISOString()
-    : null
+  let accessUnlocksAt: string | null = null
+  if (metaMeetingAt) {
+    accessUnlocksAt = allInPerson
+      ? new Date().toISOString() // unlock now for in-person
+      : new Date(
+          new Date(metaMeetingAt).getTime() - 48 * 60 * 60 * 1000
+        ).toISOString()
+  } else if (allManualSchedule) {
+    // No cohort picked (private 1:1 or in-person without pre-set date).
+    // Grant access immediately; admin schedules the live session post-sale.
+    accessUnlocksAt = new Date().toISOString()
+  }
 
   let legacyIntentId: string | null = null
   let legacyCohortId: string | null = null
@@ -239,9 +241,8 @@ export async function POST(request: Request) {
       .eq('id', legacyIntentId)
   }
 
-  // Grant course access. Bundle expands to every core + addon course, matching
-  // the Square webhook's behavior so existing LMS gating continues to work.
-  // Multi-item carts iterate every key from metadata and grant each.
+  // Grant course access. Bundles expand to their child slugs; private SKUs
+  // grant the standard course + mark the purchase as private_1on1.
   const coursesGranted = courseKeysFromMeta.length > 0
     ? await grantManyCourses({
         supabase,
@@ -252,7 +253,7 @@ export async function POST(request: Request) {
         accessUnlocksAt,
         amountPaid,
       })
-    : await grantCourseAccess({
+    : await grantLegacyCourse({
         supabase,
         userId,
         courseKey: legacyCourseKey!,
@@ -265,7 +266,7 @@ export async function POST(request: Request) {
 
   // Resolve the meeting link for the email from any one of the granted
   // courses' cohort rows (they all share meetingAt, so the link is the same).
-  if (!meetingLink && meetingAt) {
+  if (!meetingLink && meetingAt && !allInPerson) {
     const { data: linkRow } = await supabase
       .from('course_cohorts')
       .select('meeting_link')
@@ -294,7 +295,7 @@ export async function POST(request: Request) {
     if (toEmail && coursesGranted.length > 0) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://skilledvisitsacademy.com'
       const meetingInfo =
-        meetingAt && accessUnlocksAt
+        meetingAt && accessUnlocksAt && !allInPerson
           ? {
               meetingAt,
               meetingLink,
@@ -329,7 +330,8 @@ export async function POST(request: Request) {
 
 type SupabaseServiceClient = Awaited<ReturnType<typeof createServiceClient>>
 
-async function grantCourseAccess({
+// Legacy single-course grant, kept so old paymentLinkId webhooks still work.
+async function grantLegacyCourse({
   supabase,
   userId,
   courseKey,
@@ -348,38 +350,6 @@ async function grantCourseAccess({
   accessUnlocksAt: string | null
   amountPaid: number
 }): Promise<SvaCourseKey[]> {
-  const baseRow = {
-    jidopay_session_id: paymentId,
-    jidopay_payment_link_id: linkId,
-    cohort_id: cohortId,
-    access_unlocks_at: accessUnlocksAt,
-    amount_paid: amountPaid,
-  }
-
-  if (courseKey in BUNDLE_EXPANSION) {
-    const courseTypes = BUNDLE_EXPANSION[courseKey as keyof typeof BUNDLE_EXPANSION]
-    const { data: courses } = await supabase
-      .from('courses')
-      .select('id, slug')
-      .in('course_type', courseTypes)
-
-    if (!courses || courses.length === 0) return []
-
-    for (const course of courses) {
-      await supabase.from('course_purchases').upsert(
-        {
-          user_id: userId,
-          course_id: course.id,
-          ...baseRow,
-        },
-        { onConflict: 'user_id,course_id' }
-      )
-    }
-    // Return the bundle key so the confirmation email reads the bundle's
-    // marketing title instead of every individual course.
-    return [courseKey]
-  }
-
   const { data: course } = await supabase
     .from('courses')
     .select('id')
@@ -392,7 +362,11 @@ async function grantCourseAccess({
     {
       user_id: userId,
       course_id: course.id,
-      ...baseRow,
+      jidopay_session_id: paymentId,
+      jidopay_payment_link_id: linkId,
+      cohort_id: cohortId,
+      access_unlocks_at: accessUnlocksAt,
+      amount_paid: amountPaid,
     },
     { onConflict: 'user_id,course_id' }
   )
@@ -400,11 +374,11 @@ async function grantCourseAccess({
   return [courseKey]
 }
 
-// Grant access for a multi-item dynamic checkout. Each course key is
-// processed individually so the bundle expansion rules still apply. Per-
-// course cohort ids are resolved by matching the shared `meetingAt` against
-// each course's own course_cohorts row — admin's bulk-schedule flow creates
-// them with the same meeting_at, which keeps the FK intact.
+// Multi-item dynamic-checkout grant. Each course key is processed
+// individually so bundle and private-SKU expansion rules still apply.
+// Per-course cohort ids are resolved by matching the shared `meetingAt`
+// against each course's own course_cohorts row — admin's bulk-schedule
+// flow creates them with the same meeting_at, which keeps the FK intact.
 async function grantManyCourses({
   supabase,
   userId,
@@ -435,38 +409,16 @@ async function grantManyCourses({
     }
   }
 
-  const granted: SvaCourseKey[] = []
-  for (const key of courseKeys) {
-    if (key in BUNDLE_EXPANSION) {
-      const courseTypes = BUNDLE_EXPANSION[key as keyof typeof BUNDLE_EXPANSION]
-      const { data: courses } = await supabase
-        .from('courses')
-        .select('id, slug')
-        .in('course_type', courseTypes)
-      for (const course of courses ?? []) {
-        await supabase.from('course_purchases').upsert(
-          {
-            user_id: userId,
-            course_id: course.id,
-            jidopay_session_id: paymentId,
-            jidopay_payment_link_id: null,
-            cohort_id: cohortByCourseId.get(course.id) ?? null,
-            access_unlocks_at: accessUnlocksAt,
-            amount_paid: amountPaid,
-          },
-          { onConflict: 'user_id,course_id' }
-        )
-      }
-      granted.push(key)
-      continue
-    }
-
+  async function upsertByCourseSlug(
+    slug: string,
+    isPrivate: boolean
+  ): Promise<boolean> {
     const { data: course } = await supabase
       .from('courses')
       .select('id')
-      .eq('slug', key)
+      .eq('slug', slug)
       .single()
-    if (!course) continue
+    if (!course) return false
 
     await supabase.from('course_purchases').upsert(
       {
@@ -477,10 +429,37 @@ async function grantManyCourses({
         cohort_id: cohortByCourseId.get(course.id) ?? null,
         access_unlocks_at: accessUnlocksAt,
         amount_paid: amountPaid,
+        delivery_mode: isPrivate ? 'private_1on1' : 'group',
       },
       { onConflict: 'user_id,course_id' }
     )
-    granted.push(key)
+    return true
+  }
+
+  const granted: SvaCourseKey[] = []
+  for (const key of courseKeys) {
+    // Bundles: expand into child slugs and grant each.
+    if (key in BUNDLE_EXPANSION) {
+      const childKeys = BUNDLE_EXPANSION[key]
+      for (const childKey of childKeys) {
+        await upsertByCourseSlug(childKey, false)
+      }
+      granted.push(key)
+      continue
+    }
+
+    // Private 1:1 SKUs: grant access to the standard course and mark
+    // delivery_mode=private_1on1 so admin knows to schedule the session.
+    if (isPrivateKey(key)) {
+      const standardKey = PRIVATE_TO_STANDARD[key]
+      const ok = await upsertByCourseSlug(standardKey, true)
+      if (ok) granted.push(key)
+      continue
+    }
+
+    // Standard SKU: one-to-one grant.
+    const ok = await upsertByCourseSlug(key, false)
+    if (ok) granted.push(key)
   }
 
   return granted

@@ -2,76 +2,196 @@ import { createHmac, timingSafeEqual } from 'crypto'
 
 // Skilled Visits Academy ↔ JidoPay integration helpers.
 //
-// The JidoPay payment-link IDs below come from env vars so each environment
-// (preview / production) can point at its own test vs. live payment links
-// without a code change. Set these in Vercel → Project → Settings → Env Vars.
+// This file is the server-authoritative catalog — prices and titles live
+// here (not in the client bundle) so a tampered cart can never lower the
+// amount actually charged. The /api/checkout/create route reads from this
+// catalog and builds line items; the webhook reads titles for the receipt
+// email and resolves bundles → child courses at grant time.
+
+// ---------------------------------------------------------------------------
+// SKU catalog
+// ---------------------------------------------------------------------------
+//
+// Three delivery modes:
+//   - Online live Zoom (4 hours) — the primary delivery for everything
+//     except the in-person and private 1:1 SKUs.
+//   - In-person hands-on — physical event, scheduled separately.
+//   - Private 1:1 in-person — same content as standard courses but
+//     delivered to one learner at a custom time, priced 2× standard.
+//
+// Private 1:1 SKUs grant access to the same LMS content as their standard
+// counterpart. Admin receives a notification on purchase and schedules the
+// session manually (see README of /admin/subscribers).
 
 export type SvaCourseKey =
-  // IV Therapy lane
-  | 'iv-therapy-certification'
-  | 'complete-mastery-bundle'
+  // IV lane — online live Zoom
+  | 'iv-therapy-training'
   | 'iv-complications-emergency'
   | 'vitamin-nutrient-therapy'
   | 'nad-plus-masterclass'
   | 'iv-push-administration'
-  // Aesthetic Injection lane
-  | 'aesthetic-injections-certification'
-  | 'aesthetic-mastery-bundle'
-  | 'dermal-fillers'
-  | 'botox'
-  | 'prf-therapy'
-  | 'prf-ezgel'
+  // Aesthetic lane — online live Zoom
+  | 'botox-basic'
+  | 'botox-advanced'
+  | 'filler-basic'
+  | 'filler-advanced'
+  | 'aesthetic-injector-bundle'
+  // Regenerative aesthetics — online live Zoom
+  | 'prp-prf-ezgel'
+  // In-person hands-on
+  | 'bbl-russian-lip-inperson'
+  // Private 1:1 (in-person / dedicated Zoom)
+  | 'private-iv-therapy-training'
+  | 'private-botox-basic'
+  | 'private-botox-advanced'
+  | 'private-filler-basic'
+  | 'private-filler-advanced'
+  | 'private-prp-prf-ezgel'
+  | 'private-bbl-russian-lip'
 
-// Bundle pseudo-SKUs — they have no `courses` row. The webhook expands
-// each bundle key into the real rows it grants. Helpers use this to
-// enumerate the lanes without string-matching in five places.
-export const IV_BUNDLE_KEY = 'complete-mastery-bundle' as const
-export const AESTHETIC_BUNDLE_KEY = 'aesthetic-mastery-bundle' as const
+// Bundles are pseudo-SKUs — they have no `courses` row. The webhook
+// expands each bundle key into the explicit child course slugs below.
+export const AESTHETIC_INJECTOR_BUNDLE_KEY = 'aesthetic-injector-bundle' as const
 export const BUNDLE_KEYS: readonly SvaCourseKey[] = [
-  IV_BUNDLE_KEY,
-  AESTHETIC_BUNDLE_KEY,
+  AESTHETIC_INJECTOR_BUNDLE_KEY,
 ]
 
-// For each bundle, the course_type values that get expanded. Kept here so
-// the webhook (server) and storefront (client) agree on what a bundle means.
-export const BUNDLE_EXPANSION: Record<
-  typeof IV_BUNDLE_KEY | typeof AESTHETIC_BUNDLE_KEY,
-  string[]
-> = {
-  [IV_BUNDLE_KEY]: ['core', 'addon'],
-  [AESTHETIC_BUNDLE_KEY]: ['aesthetic'],
+// Explicit child-slug map — the client's bundle definition, encoded once.
+// Webhook iterates and grants each child course. Kept flat (slug list
+// instead of course_type filter) so bundle membership is obvious at a
+// glance.
+export const BUNDLE_EXPANSION: Record<string, SvaCourseKey[]> = {
+  [AESTHETIC_INJECTOR_BUNDLE_KEY]: [
+    'botox-basic',
+    'botox-advanced',
+    'filler-basic',
+    'filler-advanced',
+  ],
 }
 
-// Public (client-side readable) — used by the checkout page to pick the
-// right payment link for the course the student chose.
-// Legacy pre-created payment-link map. The dynamic checkout flow (used by
-// the cart and by all aesthetic courses) doesn't rely on this at all — it
-// exists only so the webhook's legacy path can still resolve a paymentLinkId
-// for any old IV payment links still in flight from before the dynamic
-// switchover. Aesthetic courses intentionally have no legacy entries because
-// they were born into the dynamic-checkout world.
-export const COURSE_TO_LINK_ENV: Record<SvaCourseKey, string> = {
-  'iv-therapy-certification': 'NEXT_PUBLIC_JIDOPAY_LINK_IV_CERT',
-  'complete-mastery-bundle': 'NEXT_PUBLIC_JIDOPAY_LINK_BUNDLE',
-  'iv-complications-emergency': 'NEXT_PUBLIC_JIDOPAY_LINK_COMPLICATIONS',
-  'vitamin-nutrient-therapy': 'NEXT_PUBLIC_JIDOPAY_LINK_VITAMIN',
-  'nad-plus-masterclass': 'NEXT_PUBLIC_JIDOPAY_LINK_NAD',
-  'iv-push-administration': 'NEXT_PUBLIC_JIDOPAY_LINK_IV_PUSH',
-  'aesthetic-injections-certification': '',
-  'aesthetic-mastery-bundle': '',
-  'dermal-fillers': '',
-  'botox': '',
-  'prf-therapy': '',
-  'prf-ezgel': '',
+// Private 1:1 → standard course slug map. Purchasing a private SKU grants
+// access to the standard course's LMS content and marks the purchase with
+// `delivery_mode: 'private_1on1'` (see course_purchases.delivery_mode).
+// Admin schedules the private session manually.
+export const PRIVATE_TO_STANDARD: Record<string, SvaCourseKey> = {
+  'private-iv-therapy-training': 'iv-therapy-training',
+  'private-botox-basic': 'botox-basic',
+  'private-botox-advanced': 'botox-advanced',
+  'private-filler-basic': 'filler-basic',
+  'private-filler-advanced': 'filler-advanced',
+  'private-prp-prf-ezgel': 'prp-prf-ezgel',
+  'private-bbl-russian-lip': 'bbl-russian-lip-inperson',
 }
 
-// Server-side reverse map — resolves an incoming webhook's paymentLinkId back
-// to the SVA course key. Same env vars, read on the server.
+export function isPrivateKey(key: string): boolean {
+  return key in PRIVATE_TO_STANDARD
+}
+
+// In-person SKUs don't use the 48h-before-Zoom access unlock model — they
+// grant immediate access to pre-reading materials and a scheduled event.
+export const IN_PERSON_KEYS: readonly SvaCourseKey[] = [
+  'bbl-russian-lip-inperson',
+  'private-bbl-russian-lip',
+]
+
+export function isInPersonKey(key: string): boolean {
+  return (IN_PERSON_KEYS as readonly string[]).includes(key)
+}
+
+export const COURSE_TITLES: Record<SvaCourseKey, string> = {
+  'iv-therapy-training': 'Comprehensive IV Therapy Training',
+  'iv-complications-emergency': 'IV Complications & Emergency Management',
+  'vitamin-nutrient-therapy': 'Vitamin & Nutrient Therapy Masterclass',
+  'nad-plus-masterclass': 'NAD+ Therapy Masterclass',
+  'iv-push-administration': 'IV Push Administration Masterclass',
+  'botox-basic': 'Basic Botox Training',
+  'botox-advanced': 'Advanced Botox Training',
+  'filler-basic': 'Basic Dermal Filler Training',
+  'filler-advanced': 'Advanced Dermal Filler Training',
+  'aesthetic-injector-bundle': 'Complete Aesthetic Injector Bundle',
+  'prp-prf-ezgel': 'PRP, PRF & EZ Gel Training',
+  'bbl-russian-lip-inperson': 'Non-Surgical BBL & Russian Lip Technique',
+  'private-iv-therapy-training': 'Private Comprehensive IV Therapy Training',
+  'private-botox-basic': 'Private Basic Botox Training',
+  'private-botox-advanced': 'Private Advanced Botox Training',
+  'private-filler-basic': 'Private Basic Dermal Filler Training',
+  'private-filler-advanced': 'Private Advanced Dermal Filler Training',
+  'private-prp-prf-ezgel': 'Private PRP, PRF & EZ Gel Training',
+  'private-bbl-russian-lip': 'Private Non-Surgical BBL & Russian Lip Technique',
+}
+
+// Display prices for UI / receipts.
+export const COURSE_PRICES: Record<SvaCourseKey, string> = {
+  'iv-therapy-training': '$399',
+  'iv-complications-emergency': '$199',
+  'vitamin-nutrient-therapy': '$199',
+  'nad-plus-masterclass': '$199',
+  'iv-push-administration': '$199',
+  'botox-basic': '$399',
+  'botox-advanced': '$499',
+  'filler-basic': '$399',
+  'filler-advanced': '$499',
+  'aesthetic-injector-bundle': '$1,000',
+  'prp-prf-ezgel': '$499',
+  'bbl-russian-lip-inperson': '$2,500',
+  'private-iv-therapy-training': '$798',
+  'private-botox-basic': '$798',
+  'private-botox-advanced': '$998',
+  'private-filler-basic': '$798',
+  'private-filler-advanced': '$998',
+  'private-prp-prf-ezgel': '$998',
+  'private-bbl-russian-lip': '$5,000',
+}
+
+// Server-authoritative prices in cents. The checkout-create route reads
+// these (never the client-supplied amount) so a tampered cart can't lower
+// the price paid.
+export const COURSE_PRICES_CENTS: Record<SvaCourseKey, number> = {
+  'iv-therapy-training': 39900,
+  'iv-complications-emergency': 19900,
+  'vitamin-nutrient-therapy': 19900,
+  'nad-plus-masterclass': 19900,
+  'iv-push-administration': 19900,
+  'botox-basic': 39900,
+  'botox-advanced': 49900,
+  'filler-basic': 39900,
+  'filler-advanced': 49900,
+  'aesthetic-injector-bundle': 100000,
+  'prp-prf-ezgel': 49900,
+  'bbl-russian-lip-inperson': 250000,
+  'private-iv-therapy-training': 79800,
+  'private-botox-basic': 79800,
+  'private-botox-advanced': 99800,
+  'private-filler-basic': 79800,
+  'private-filler-advanced': 99800,
+  'private-prp-prf-ezgel': 99800,
+  'private-bbl-russian-lip': 500000,
+}
+
+export const ALL_COURSE_KEYS: readonly SvaCourseKey[] = Object.keys(
+  COURSE_PRICES_CENTS
+) as SvaCourseKey[]
+
+export function isValidCourseKey(key: unknown): key is SvaCourseKey {
+  return typeof key === 'string' && key in COURSE_PRICES_CENTS
+}
+
+// ---------------------------------------------------------------------------
+// Legacy pre-created payment-link map.
+//
+// Before the dynamic-checkout switchover we had pre-created JidoPay payment
+// links for each IV course, keyed off env vars. Those env vars still exist
+// in Vercel, so any in-flight checkout from the old flow can still map its
+// paymentLinkId back to a course key. New purchases go through
+// /api/checkout/create and never consult this map.
+//
+// Only the 4 legacy IV masterclasses + old IV cert are still resolvable.
+// The old course keys (`iv-therapy-certification`, `complete-mastery-bundle`)
+// map into the new slug scheme so enrollments survive.
 export function linkIdToCourseKey(linkId: string | null): SvaCourseKey | null {
   if (!linkId) return null
   const pairs: Array<[SvaCourseKey, string | undefined]> = [
-    ['iv-therapy-certification', process.env.NEXT_PUBLIC_JIDOPAY_LINK_IV_CERT],
-    ['complete-mastery-bundle', process.env.NEXT_PUBLIC_JIDOPAY_LINK_BUNDLE],
+    ['iv-therapy-training', process.env.NEXT_PUBLIC_JIDOPAY_LINK_IV_CERT],
     ['iv-complications-emergency', process.env.NEXT_PUBLIC_JIDOPAY_LINK_COMPLICATIONS],
     ['vitamin-nutrient-therapy', process.env.NEXT_PUBLIC_JIDOPAY_LINK_VITAMIN],
     ['nad-plus-masterclass', process.env.NEXT_PUBLIC_JIDOPAY_LINK_NAD],
@@ -83,57 +203,12 @@ export function linkIdToCourseKey(linkId: string | null): SvaCourseKey | null {
   return null
 }
 
-export const COURSE_TITLES: Record<SvaCourseKey, string> = {
-  'iv-therapy-certification': 'IV Therapy Certification',
-  'complete-mastery-bundle': 'Complete IV Therapy Mastery Bundle',
-  'iv-complications-emergency': 'Advanced IV Complications & Emergency Management',
-  'vitamin-nutrient-therapy': 'Vitamin & Nutrient Therapy Masterclass',
-  'nad-plus-masterclass': 'NAD+ Therapy Masterclass',
-  'iv-push-administration': 'IV Push Administration Masterclass',
-  'aesthetic-injections-certification': 'Aesthetic Injections Certification',
-  'aesthetic-mastery-bundle': 'Complete Aesthetic Injections Mastery Bundle',
-  'dermal-fillers': 'Dermal Fillers Masterclass',
-  'botox': 'Botox (Neurotoxin) Masterclass',
-  'prf-therapy': 'PRF Therapy Masterclass',
-  'prf-ezgel': 'PRF EZGel Masterclass',
-}
+// ---------------------------------------------------------------------------
+// Processing-fee gross-up
+//
+// JidoPay charges 3.5% + $0.30 per transaction. We gross up the shopper's
+// subtotal so the merchant nets the sticker price we advertised.
 
-export const COURSE_PRICES: Record<SvaCourseKey, string> = {
-  'iv-therapy-certification': '$299',
-  'complete-mastery-bundle': '$499',
-  'iv-complications-emergency': '$149',
-  'vitamin-nutrient-therapy': '$149',
-  'nad-plus-masterclass': '$149',
-  'iv-push-administration': '$149',
-  'aesthetic-injections-certification': '$299',
-  'aesthetic-mastery-bundle': '$499',
-  'dermal-fillers': '$149',
-  'botox': '$149',
-  'prf-therapy': '$149',
-  'prf-ezgel': '$149',
-}
-
-// Server-authoritative course prices in cents. The checkout create route
-// reads these (never the client-supplied amount) so a tampered cart can't
-// lower the price paid.
-export const COURSE_PRICES_CENTS: Record<SvaCourseKey, number> = {
-  'iv-therapy-certification': 29900,
-  'complete-mastery-bundle': 49900,
-  'iv-complications-emergency': 14900,
-  'vitamin-nutrient-therapy': 14900,
-  'nad-plus-masterclass': 14900,
-  'iv-push-administration': 14900,
-  'aesthetic-injections-certification': 29900,
-  'aesthetic-mastery-bundle': 49900,
-  'dermal-fillers': 14900,
-  'botox': 14900,
-  'prf-therapy': 14900,
-  'prf-ezgel': 14900,
-}
-
-// JidoPay processing fee that the shopper covers on top of the sticker
-// price: 3.5% + $0.30. We gross up the SVA cart subtotal so the merchant
-// nets the advertised course price.
 const FEE_PERCENT = 0.035
 const FEE_FIXED_CENTS = 30
 

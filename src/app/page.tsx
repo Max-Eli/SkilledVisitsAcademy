@@ -140,17 +140,17 @@ export default function LandingPage() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    href="/checkout?course=iv-therapy-certification"
+                    href="/checkout?course=iv-therapy-training"
                     className="inline-flex items-center justify-center gap-2 px-8 py-[17px] rounded-[30px] border border-[#9E50E5] text-[#9E50E5] hover:bg-[#9E50E5] hover:text-white font-semibold text-[15px] transition-colors"
                   >
-                    Enroll Now — $299
+                    Enroll Now — $399
                   </Link>
                 </div>
               </AnimateOnScroll>
 
               <AnimateOnScroll delay={280}>
                 <div className="flex flex-wrap gap-5 justify-center lg:justify-start">
-                  {['Cancel anytime', 'HIPAA-conscious design', 'SVA-approved protocols', 'Instant access'].map((item) => (
+                  {['Live instructor-led', 'Licensed providers only', 'SVA-approved protocols', 'Completion certificate'].map((item) => (
                     <div key={item} className="flex items-center gap-2 text-sm text-[#5B5B5B]">
                       <CheckCircle className="h-4 w-4 text-[#9E50E5] flex-shrink-0" />
                       {item}
@@ -313,10 +313,10 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/checkout?course=iv-therapy-certification"
+              href="/checkout?course=iv-therapy-training"
               className="inline-flex items-center justify-center gap-2 px-9 py-[17px] rounded-[30px] bg-white text-[#9E50E5] hover:bg-[#FBF6FF] font-bold text-[15px] transition-colors"
             >
-              Enroll Now — $299
+              Enroll Now — $399
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link

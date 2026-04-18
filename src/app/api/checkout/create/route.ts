@@ -4,6 +4,9 @@ import {
   COURSE_PRICES_CENTS,
   COURSE_TITLES,
   grossUpCents,
+  isInPersonKey,
+  isPrivateKey,
+  isValidCourseKey,
   type SvaCourseKey,
 } from '@/lib/jidopay'
 
@@ -21,21 +24,6 @@ import {
 //      inside the embed modal.
 
 export const runtime = 'nodejs'
-
-const VALID_COURSE_KEYS: SvaCourseKey[] = [
-  'iv-therapy-certification',
-  'complete-mastery-bundle',
-  'iv-complications-emergency',
-  'vitamin-nutrient-therapy',
-  'nad-plus-masterclass',
-  'iv-push-administration',
-  'aesthetic-injections-certification',
-  'aesthetic-mastery-bundle',
-  'dermal-fillers',
-  'botox',
-  'prf-therapy',
-  'prf-ezgel',
-]
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -57,37 +45,54 @@ export async function POST(request: Request) {
     !Array.isArray(body.courseKeys) ||
     body.courseKeys.length === 0 ||
     body.courseKeys.length > 10 ||
-    !body.courseKeys.every((k): k is SvaCourseKey =>
-      typeof k === 'string' && VALID_COURSE_KEYS.includes(k as SvaCourseKey)
-    )
+    !body.courseKeys.every(isValidCourseKey)
   ) {
     return NextResponse.json(
       { error: 'Invalid courseKeys' },
       { status: 400 }
     )
   }
-  if (typeof body.cohortId !== 'string' || body.cohortId.length === 0) {
-    return NextResponse.json({ error: 'Missing cohortId' }, { status: 400 })
-  }
-
   const courseKeys = body.courseKeys as SvaCourseKey[]
   // De-dupe so a glitchy cart can't charge for the same course twice.
   const uniqueKeys = Array.from(new Set(courseKeys))
 
-  // Look up the selected cohort so we can pin `cohortMeetingAt` in metadata.
-  // The webhook will use that meeting_at to find each purchased course's
-  // matching cohort (bulk-created by admin with the same meeting_at).
-  const service = await createServiceClient()
-  const { data: cohort, error: cohortErr } = await service
-    .from('course_cohorts')
-    .select('id, meeting_at, active')
-    .eq('id', body.cohortId)
-    .maybeSingle()
-  if (cohortErr || !cohort || !cohort.active) {
+  // In-person and Private 1:1 SKUs require admin to manually schedule the
+  // session — they skip the Zoom-cohort picker entirely. Reject if mixed
+  // with standard live-Zoom courses so we don't silently pin a wrong date
+  // onto the manual-schedule items.
+  const anyManual = uniqueKeys.some((k) => isInPersonKey(k) || isPrivateKey(k))
+  const allManual = uniqueKeys.every((k) => isInPersonKey(k) || isPrivateKey(k))
+  if (anyManual && !allManual) {
     return NextResponse.json(
-      { error: 'Selected cohort is unavailable' },
+      {
+        error:
+          'In-person and Private 1:1 courses must be purchased separately from standard live-Zoom courses.',
+      },
       { status: 400 }
     )
+  }
+
+  // Standard live-Zoom carts require a picked cohort id; manual-schedule
+  // carts must not send one (we derive meeting_at = null and let admin
+  // schedule post-payment via the dashboard).
+  let cohortRow: { id: string; meeting_at: string } | null = null
+  if (!allManual) {
+    if (typeof body.cohortId !== 'string' || body.cohortId.length === 0) {
+      return NextResponse.json({ error: 'Missing cohortId' }, { status: 400 })
+    }
+    const service = await createServiceClient()
+    const { data: cohort, error: cohortErr } = await service
+      .from('course_cohorts')
+      .select('id, meeting_at, active')
+      .eq('id', body.cohortId)
+      .maybeSingle()
+    if (cohortErr || !cohort || !cohort.active) {
+      return NextResponse.json(
+        { error: 'Selected cohort is unavailable' },
+        { status: 400 }
+      )
+    }
+    cohortRow = { id: cohort.id, meeting_at: cohort.meeting_at }
   }
 
   // Build line items using the server-authoritative catalog.
@@ -129,11 +134,14 @@ export async function POST(request: Request) {
   // Metadata the webhook will receive back verbatim — these drive access
   // grants and cohort pinning. Keep keys short so we stay under Stripe's
   // 500-char value limit (courses list is our only concern at 6 keys max).
+  // Manual-schedule carts omit cohort metadata; the webhook handles both.
   const metadata: Record<string, string> = {
     sva_user_id: user.id,
     sva_courses: uniqueKeys.join(','),
-    sva_cohort_id: cohort.id,
-    sva_cohort_meeting_at: cohort.meeting_at,
+  }
+  if (cohortRow) {
+    metadata.sva_cohort_id = cohortRow.id
+    metadata.sva_cohort_meeting_at = cohortRow.meeting_at
   }
 
   let response: Response
