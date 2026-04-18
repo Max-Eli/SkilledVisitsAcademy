@@ -11,6 +11,7 @@ import {
   COURSE_PRICES,
   COURSE_TITLES,
   PRIVATE_TO_STANDARD,
+  UNSCHEDULED_ACCESS_SENTINEL,
   isInPersonKey,
   isPrivateKey,
   isValidCourseKey,
@@ -177,11 +178,13 @@ export async function POST(request: Request) {
 
   // Resolve the meeting time + shared "access unlocks 48h before" timestamp.
   // Three modes:
-  //  - Standard live-Zoom (metaMeetingAt present): unlock 48h before
-  //  - In-person (metaMeetingAt present, all in-person): unlock now
+  //  - Standard live-Zoom (metaMeetingAt present, non-in-person): unlock 48h
+  //    before the cohort meeting
+  //  - In-person with metaMeetingAt: unlock 48h before the in-person date
   //  - Manual-schedule with no metaMeetingAt (in-person OR private 1:1 with
-  //    no pre-selected date): unlock now so learners can start pre-reading
-  //    while admin schedules the live portion
+  //    no pre-selected date): stamp the unscheduled sentinel so materials
+  //    stay locked. Admin overwrites access_unlocks_at with
+  //    `scheduled_at - 48h` when they confirm the session.
   const allInPerson =
     courseKeysFromMeta.length > 0 &&
     courseKeysFromMeta.every((k) => isInPersonKey(k))
@@ -192,15 +195,11 @@ export async function POST(request: Request) {
   let meetingLink: string | null = null
   let accessUnlocksAt: string | null = null
   if (metaMeetingAt) {
-    accessUnlocksAt = allInPerson
-      ? new Date().toISOString() // unlock now for in-person
-      : new Date(
-          new Date(metaMeetingAt).getTime() - 48 * 60 * 60 * 1000
-        ).toISOString()
+    accessUnlocksAt = new Date(
+      new Date(metaMeetingAt).getTime() - 48 * 60 * 60 * 1000
+    ).toISOString()
   } else if (allManualSchedule) {
-    // No cohort picked (private 1:1 or in-person without pre-set date).
-    // Grant access immediately; admin schedules the live session post-sale.
-    accessUnlocksAt = new Date().toISOString()
+    accessUnlocksAt = UNSCHEDULED_ACCESS_SENTINEL
   }
 
   let legacyIntentId: string | null = null
@@ -312,6 +311,7 @@ export async function POST(request: Request) {
         totalPaid: `$${(amountPaid / 100).toFixed(2)}`,
         loginUrl: `${appUrl}/dashboard`,
         meeting: meetingInfo,
+        pendingSchedule: allManualSchedule && !metaMeetingAt,
       }
       await resend.emails.send({
         from: FROM_EMAIL,

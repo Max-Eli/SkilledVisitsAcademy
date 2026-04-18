@@ -17,6 +17,7 @@ import {
   Video,
 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
+import { isUnscheduledSentinel } from '@/lib/jidopay'
 import type { Lesson } from '@/types/database'
 
 export default async function CourseDetailPage({
@@ -98,6 +99,7 @@ export default async function CourseDetailPage({
     : null
 
   if (lockedUntil) {
+    const pendingSchedule = isUnscheduledSentinel(lockedUntil)
     const unlockDate = new Date(lockedUntil)
     const meetingDate = cohortMeetingAt ? new Date(cohortMeetingAt) : null
     const fmtDate = (d: Date) =>
@@ -131,12 +133,20 @@ export default async function CourseDetailPage({
             </div>
             <Badge variant="secondary" className="mb-3">{course.category}</Badge>
             <h1 className="text-2xl font-bold text-[#1a1a1a] mb-2">{course.title}</h1>
-            <p className="text-sm text-[#5B5B5B] mb-6">
-              Your course materials unlock <strong>{fmtDate(unlockDate)}</strong> — 48 hours
-              before your live session so you can prep.
-            </p>
+            {pendingSchedule ? (
+              <p className="text-sm text-[#5B5B5B] mb-6">
+                Our clinical team will reach out shortly to confirm your date. Your course
+                materials unlock <strong>48 hours before your scheduled session</strong> so
+                you can prep.
+              </p>
+            ) : (
+              <p className="text-sm text-[#5B5B5B] mb-6">
+                Your course materials unlock <strong>{fmtDate(unlockDate)}</strong> — 48 hours
+                before your scheduled session so you can prep.
+              </p>
+            )}
 
-            {meetingDate && (
+            {!pendingSchedule && meetingDate && (
               <div className="rounded-xl border border-[#E9D8FB] bg-[#FBF6FF] p-5 mb-6 text-left">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-[#9b9b9b] mb-2">
                   Your live session

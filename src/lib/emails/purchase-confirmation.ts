@@ -9,6 +9,10 @@ export interface PurchaseConfirmationData {
     meetingLink: string | null
     accessUnlocksAt: string // ISO
   }
+  // Set for in-person and private 1:1 purchases where the learner did not
+  // pre-select a date. Renders a "we'll reach out to schedule" block instead
+  // of the standard live-session block.
+  pendingSchedule?: boolean
 }
 
 function formatMeetingDate(iso: string): string {
@@ -31,7 +35,7 @@ function formatMeetingTime(iso: string): string {
 }
 
 export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string {
-  const { studentName, courses, totalPaid, loginUrl, meeting } = data
+  const { studentName, courses, totalPaid, loginUrl, meeting, pendingSchedule } = data
   const firstName = studentName.split(' ')[0] || 'Provider'
   const courseList = courses
     .map(
@@ -43,8 +47,23 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
     )
     .join('')
 
-  const meetingBlock = meeting
+  const meetingBlock = pendingSchedule
     ? `
+              <!-- Pending-schedule block (in-person / private 1:1) -->
+              <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9b9b9b;">We&rsquo;ll be in touch to schedule</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#FBF6FF;border-radius:10px;border:1px solid #E9D8FB;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0;font-size:15px;font-weight:700;color:#1a1a1a;">Our clinical team will reach out within 1 business day to confirm your session date.</p>
+                    <p style="margin:10px 0 0;font-size:13px;color:#5b5b5b;line-height:1.6;">
+                      Once your date is confirmed, your course materials unlock <strong>48 hours before your scheduled session</strong> so you can prep.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              `
+    : meeting
+      ? `
               <!-- Live session block -->
               <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9b9b9b;">Your live session</p>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#FBF6FF;border-radius:10px;border:1px solid #E9D8FB;">
@@ -64,7 +83,7 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
                 </tr>
               </table>
               `
-    : ''
+      : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -174,9 +193,16 @@ export function purchaseConfirmationHtml(data: PurchaseConfirmationData): string
 }
 
 export function purchaseConfirmationText(data: PurchaseConfirmationData): string {
-  const { studentName, courses, totalPaid, loginUrl, meeting } = data
-  const meetingLines = meeting
+  const { studentName, courses, totalPaid, loginUrl, meeting, pendingSchedule } = data
+  const meetingLines = pendingSchedule
     ? `
+
+WE'LL BE IN TOUCH TO SCHEDULE
+Our clinical team will reach out within 1 business day to confirm your session date.
+Course materials unlock 48 hours before your scheduled session.
+`
+    : meeting
+      ? `
 
 YOUR LIVE SESSION
 ${formatMeetingDate(meeting.meetingAt)} at ${formatMeetingTime(meeting.meetingAt)}
@@ -184,7 +210,7 @@ ${meeting.meetingLink ? `Join: ${meeting.meetingLink}` : 'We will email you the 
 
 Course materials unlock on ${formatMeetingDate(meeting.accessUnlocksAt)} (48 hours before your session).
 `
-    : ''
+      : ''
 
   return `Hi ${studentName},
 

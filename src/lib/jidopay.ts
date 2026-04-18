@@ -98,6 +98,19 @@ export function isInPersonKey(key: string): boolean {
   return (IN_PERSON_KEYS as readonly string[]).includes(key)
 }
 
+// Sentinel stamped on course_purchases.access_unlocks_at for manually-scheduled
+// purchases (in-person, private 1:1) that the learner bought without picking a
+// date. Admin later schedules the session and overwrites this with
+// `scheduled_at - 48h`. The sentinel is far enough in the future that the
+// standard `access_unlocks_at > now` lock check keeps materials locked, while
+// still being detectable so we can render pending-schedule copy instead of a
+// countdown.
+export const UNSCHEDULED_ACCESS_SENTINEL = '9999-12-31T23:59:59.000Z'
+
+export function isUnscheduledSentinel(iso: string | null | undefined): boolean {
+  return iso === UNSCHEDULED_ACCESS_SENTINEL
+}
+
 export const COURSE_TITLES: Record<SvaCourseKey, string> = {
   'iv-therapy-training': 'Comprehensive IV Therapy Training',
   'iv-complications-emergency': 'IV Complications & Emergency Management',
